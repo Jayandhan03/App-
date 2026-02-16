@@ -1,4 +1,41 @@
+"use client";
+
+import { useState } from "react";
+
 export default function Home() {
+  const [topic, setTopic] = useState("");
+  const [news, setNews] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleGenerate = async () => {
+    if (!topic.trim()) return;
+
+    setLoading(true);
+    setNews("");
+
+    try {
+      const res = await fetch("/api/generate-news", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ topic }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        setNews(data.news);
+      } else {
+        setNews("⚠️ Error generating news.");
+      }
+    } catch (error) {
+      setNews("🚨 Server error. Is FastAPI running?");
+    }
+
+    setLoading(false);
+  };
+
   return (
     <main className="max-w-6xl mx-auto px-6 py-20 space-y-20">
 
@@ -33,6 +70,38 @@ export default function Home() {
         <div className="pt-6 text-xs text-white/40">
           Designed for founders, operators, and focused thinkers.
         </div>
+      </section>
+
+      {/* GENERATE NEWS SECTION */}
+      <section className="space-y-6">
+        <h2 className="text-center text-xl font-semibold text-white/80">
+          Generate My Latest News
+        </h2>
+
+        <div className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
+          <input
+            type="text"
+            placeholder="Enter a topic..."
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+            className="flex-1 px-6 py-3 bg-[#151515] border border-white/10 rounded-full text-sm text-white focus:outline-none focus:border-white/30 transition"
+          />
+
+          <button
+            onClick={handleGenerate}
+            disabled={loading}
+            className="px-6 py-3 bg-white text-black rounded-full text-sm font-medium hover:opacity-90 transition whitespace-nowrap disabled:opacity-50"
+          >
+            {loading ? "Generating..." : "Generate News"}
+          </button>
+        </div>
+
+        {/* NEWS OUTPUT */}
+        {news && (
+          <div className="max-w-3xl mx-auto mt-8 p-6 bg-[#111] border border-white/10 rounded-2xl text-white/80 leading-relaxed whitespace-pre-wrap">
+            {news}
+          </div>
+        )}
       </section>
 
       {/* FEATURE TABS SECTION */}
