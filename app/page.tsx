@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
 import ThemeToggle from "@/components/ThemeToggle";
 import Logo from "@/components/Logo";
+import Reveal from "@/components/Reveal";
 
 /* ───────────────────────── Icons (single outline family) ───────────────── */
 const I = {
@@ -37,24 +38,29 @@ function WaitlistForm({ source }: { source: string }) {
     } catch { setState("error"); setMsg("Network error. Try again."); }
   };
   return (
-    <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", maxWidth: 420 }}>
-      <div style={{ display: "flex", gap: 8 }}>
-        <input className="input" type="email" required placeholder="you@work.com" value={email} onChange={e => setEmail(e.target.value)} />
-        <button type="submit" className="btn btn-primary" disabled={state === "loading"} style={{ flexShrink: 0 }}>
-          {state === "loading" ? "…" : state === "done" ? "Joined" : "Get early access"}
+    <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", maxWidth: 440 }}>
+      <div className="waitlist-row" style={{ display: "flex", gap: 8 }}>
+        <input className="input" type="email" required placeholder="you@work.com" value={email} onChange={e => setEmail(e.target.value)} style={{ height: 48 }} />
+        <button type="submit" className="btn btn-primary" disabled={state === "loading"} style={{ flexShrink: 0, height: 48 }}>
+          {state === "loading" ? <span className="spinner" style={{ width: 15, height: 15, borderTopColor: "var(--solid-ink)" }} /> : state === "done" ? <>{I.check()} Joined</> : "Get early access"}
         </button>
       </div>
-      {msg && <span style={{ fontSize: "0.78rem", color: state === "error" ? "var(--danger)" : "var(--accent-ink)" }}>{msg}</span>}
+      {msg && <span style={{ fontSize: "0.8rem", color: state === "error" ? "var(--danger)" : "var(--accent-ink)", animation: "riseSm 0.3s var(--ease) both" }}>{msg}</span>}
     </form>
   );
 }
 
 /* ───────────────────────── Live agent ticker ──────────────────────────── */
-const WORK = ["Scanning sources", "Reading 24 articles", "Cross-checking", "Detecting a trend", "Recording your voice note"];
+const WORK = ["Scanning 130 sources", "Reading 24 articles", "Cross-checking claims", "Detecting a trend", "Recording your voice note"];
 function AgentTicker() {
   const [i, setI] = useState(0);
   useEffect(() => { const t = setInterval(() => setI(v => (v + 1) % WORK.length), 2200); return () => clearInterval(t); }, []);
-  return <span className="row" style={{ gap: 8 }}><span className="dot dot-live" /><span className="thinking" style={{ fontSize: "0.82rem", fontWeight: 500 }}>{WORK[i]}…</span></span>;
+  return (
+    <span className="row" style={{ gap: 8 }}>
+      <span className="eq" aria-hidden="true"><span /><span /><span /><span /><span /></span>
+      <span className="thinking" style={{ fontSize: "0.8rem", fontWeight: 500 }}>{WORK[i]}…</span>
+    </span>
+  );
 }
 
 /* ───────────────────────── Product preview: a voice note arriving ──────── */
@@ -62,7 +68,7 @@ function VoiceBars({ n = 26, playedTo = 9 }: { n?: number; playedTo?: number }) 
   const hs = [6, 12, 18, 9, 15, 20, 11, 7, 16, 13, 19, 8, 14, 10, 17, 6, 12, 18, 9, 15, 11, 7, 16, 13, 8, 14];
   return (
     <div className="row" style={{ gap: 2, height: 22, flex: 1 }}>
-      {Array.from({ length: n }).map((_, i) => <span key={i} style={{ width: 2.5, borderRadius: 2, background: i < playedTo ? "var(--accent)" : "var(--line-3)", height: `${hs[i % hs.length]}px` }} />)}
+      {Array.from({ length: n }).map((_, i) => <span key={i} style={{ width: 2.5, borderRadius: 2, background: i < playedTo ? "var(--accent)" : "var(--line-3)", height: `${hs[i % hs.length]}px`, transition: "background 0.3s ease" }} />)}
     </div>
   );
 }
@@ -70,7 +76,7 @@ function VoiceBars({ n = 26, playedTo = 9 }: { n?: number; playedTo?: number }) 
 function DeliveryPreview() {
   return (
     <div className="card" style={{ overflow: "hidden", boxShadow: "var(--shadow-xl)", borderRadius: "var(--r-xl)" }}>
-      <div className="row between" style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", background: "var(--surface-2)" }}>
+      <div className="row between" style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", background: "var(--surface-2)", gap: 12 }}>
         <div className="row" style={{ gap: 7 }}>
           <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--line-3)" }} />
           <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--line-2)" }} />
@@ -80,9 +86,9 @@ function DeliveryPreview() {
         <span className="badge badge-muted" style={{ height: 22 }}>4 agents live</span>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.15fr 0.85fr" }}>
+      <div className="preview-grid" style={{ display: "grid", gridTemplateColumns: "1.15fr 0.85fr" }}>
         {/* chat with voice notes */}
-        <div style={{ padding: 18, borderRight: "1px solid var(--line)" }}>
+        <div style={{ padding: 20, borderRight: "1px solid var(--line)" }}>
           <div className="row between" style={{ marginBottom: 14 }}>
             <div className="row" style={{ gap: 9 }}>
               <span className="row center" style={{ width: 28, height: 28, borderRadius: "50%", background: "#229ED9", color: "#fff" }}>{I.tg()}</span>
@@ -90,12 +96,12 @@ function DeliveryPreview() {
             </div>
           </div>
           {/* text intro */}
-          <div style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "12px 12px 12px 4px", padding: "10px 12px", marginBottom: 10, maxWidth: "92%" }}>
+          <div style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "14px 14px 14px 4px", padding: "10px 12px", marginBottom: 10, maxWidth: "92%" }}>
             <div style={{ fontSize: "0.8rem", lineHeight: 1.5 }}>Good morning. Three market-moving updates overnight — here&apos;s your 2-minute brief.</div>
           </div>
           {/* voice note bubble */}
-          <div className="row" style={{ gap: 11, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 12, padding: "11px 12px", maxWidth: "92%" }}>
-            <span className="row center" style={{ width: 34, height: 34, borderRadius: "50%", background: "var(--accent)", color: "#fff", flexShrink: 0 }}>{I.play()}</span>
+          <div className="row" style={{ gap: 11, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 14, padding: "11px 12px", maxWidth: "92%" }}>
+            <span className="row center" style={{ width: 34, height: 34, borderRadius: "50%", background: "var(--accent)", color: "#fff", flexShrink: 0, boxShadow: "0 4px 14px var(--accent-glow)" }}>{I.play()}</span>
             <VoiceBars />
             <span className="mono" style={{ fontSize: "0.68rem", color: "var(--ink-3)" }}>2:04</span>
           </div>
@@ -103,17 +109,19 @@ function DeliveryPreview() {
         </div>
 
         {/* agents */}
-        <div style={{ padding: 18, background: "var(--surface-2)" }}>
-          <div className="eyebrow" style={{ marginBottom: 12 }}>Your agents</div>
+        <div style={{ padding: 20, background: "var(--surface-2)" }}>
+          <div className="eyebrow no-rule" style={{ marginBottom: 12 }}>Your agents</div>
           {[
             { n: "Finance", s: "Recording", d: true },
             { n: "AI & Tech", s: "Reading", d: true },
             { n: "My competitor", s: "Watching", d: true },
             { n: "Health", s: "Next · 6 PM", d: false },
           ].map((a, k) => (
-            <div key={k} className="row between" style={{ padding: "9px 0", borderTop: k ? "1px solid var(--line)" : "none" }}>
+            <div key={k} className="row between" style={{ padding: "10px 0", borderTop: k ? "1px solid var(--line)" : "none" }}>
               <div className="row" style={{ gap: 9 }}><span className="dot" style={{ background: a.d ? "var(--accent)" : "var(--ink-4)" }} /><span style={{ fontSize: "0.82rem", fontWeight: 500 }}>{a.n}</span></div>
-              <span style={{ fontSize: "0.72rem", color: a.d ? "var(--accent-ink)" : "var(--ink-3)" }}>{a.s}</span>
+              {a.d
+                ? <span className="row" style={{ gap: 7 }}><span className="eq" style={{ height: 10 }}><span /><span /><span /></span><span style={{ fontSize: "0.72rem", color: "var(--accent-ink)" }}>{a.s}</span></span>
+                : <span style={{ fontSize: "0.72rem", color: "var(--ink-3)" }}>{a.s}</span>}
             </div>
           ))}
         </div>
@@ -123,7 +131,7 @@ function DeliveryPreview() {
 }
 
 /* ───────────────────────── Data ───────────────────────────────────────── */
-const TOPICS = ["AI", "Startups", "Finance", "Stocks", "Crypto", "Your competitors", "Sports", "Health", "Research", "Gaming", "Politics", "Travel", "Product launches", "Any custom topic"];
+const TOPICS = ["AI industry", "Startups", "Investing", "Crypto", "Medicine", "Law", "Space", "Politics", "Fashion", "Gaming", "Sports", "Movies", "Academia", "Company monitoring", "Competitor monitoring", "Personal learning", "Research", "Any custom topic"];
 
 const CHANNELS = [
   { icon: I.app, name: "In the app", note: "Web now · mobile soon" },
@@ -152,10 +160,16 @@ const FEATURES = [
 ];
 
 const USECASES = [
-  { t: "Investors", d: "Earnings, filings and macro moves — as a voice note before the market opens." },
-  { t: "Founders & operators", d: "Competitor launches, pricing and hiring signals, whispered to you the moment they move." },
-  { t: "Executives", d: "The one thing that changed in your industry today, briefed between meetings." },
-  { t: "Anyone busy", d: "Your teams, your shows, your hobbies — the good parts, hands-free." },
+  { e: "📊", t: "Investors", d: "Earnings, filings and macro moves — as a voice note before the market opens." },
+  { e: "🚀", t: "Founders & operators", d: "Competitor launches, pricing and hiring signals, whispered to you the moment they move." },
+  { e: "🧭", t: "Executives", d: "The one thing that changed in your industry today, briefed between meetings." },
+  { e: "☕", t: "Anyone busy", d: "Your teams, your shows, your hobbies — the good parts, hands-free." },
+];
+
+const QUOTES = [
+  { q: "I get a two-minute voice note over my morning coffee and I'm fully briefed on my market. I haven't opened a news tab in weeks.", who: "Early access member", role: "Founder · B2B SaaS" },
+  { q: "It's the first product that respects my time. My competitor agent caught a pricing change before our own sales team did.", who: "Early access member", role: "Head of Product · Fintech" },
+  { q: "I set mine to Spanish, calm voice, 7 AM. It feels like a personal analyst who never sleeps.", who: "Early access member", role: "Portfolio manager" },
 ];
 
 const PRICING = [
@@ -175,7 +189,10 @@ const FAQ = [
 export default function Landing() {
   const { data: session } = useSession();
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const go = () => signIn("google", { callbackUrl: "/dashboard" });
+
+  const NAV_LINKS: [string, string][] = [["#how", "How it works"], ["#design", "Your agents"], ["#pricing", "Pricing"], ["#faq", "FAQ"]];
 
   return (
     <div style={{ background: "var(--bg)", minHeight: "100vh" }}>
@@ -184,35 +201,46 @@ export default function Landing() {
         <div className="container row between" style={{ height: "var(--nav-h)" }}>
           <a href="#top" className="row" style={{ gap: 10 }}><Logo /><span style={{ fontWeight: 600, fontSize: "0.98rem", letterSpacing: "-0.02em" }}>Leora</span></a>
           <nav className="home-nav-links row" style={{ gap: 6, position: "absolute", left: "50%", transform: "translateX(-50%)" }}>
-            {[["#how", "How it works"], ["#design", "Your agents"], ["#pricing", "Pricing"], ["#faq", "FAQ"]].map(([h, l]) => (
-              <a key={h} href={h} className="nav-link" style={{ padding: "7px 12px", borderRadius: "var(--r-sm)" }}>{l}</a>
+            {NAV_LINKS.map(([h, l]) => (
+              <a key={h} href={h} className="nav-link" style={{ padding: "7px 12px", borderRadius: "var(--r-full)" }}>{l}</a>
             ))}
           </nav>
           <div className="row" style={{ gap: 10 }}>
             <ThemeToggle />
+            <button className="nav-burger" aria-label={mobileOpen ? "Close menu" : "Open menu"} aria-expanded={mobileOpen} onClick={() => setMobileOpen(o => !o)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                {mobileOpen ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+              </svg>
+            </button>
             {session ? <Link href="/dashboard" className="btn btn-primary btn-sm">Open dashboard {I.arrow()}</Link> : (
-              <><Link href="/signin" className="nav-link" style={{ padding: "0 6px" }}>Sign in</Link><button onClick={go} className="btn btn-primary btn-sm">Deploy an agent</button></>
+              <><Link href="/signin" className="nav-link nav-links-desktop" style={{ padding: "0 6px" }}>Sign in</Link><button onClick={go} className="btn btn-primary btn-sm">Deploy an agent</button></>
             )}
           </div>
         </div>
+        <nav className="mobile-menu" data-open={mobileOpen}>
+          {NAV_LINKS.map(([h, l]) => <a key={h} href={h} onClick={() => setMobileOpen(false)}>{l}</a>)}
+          {!session && <Link href="/signin" onClick={() => setMobileOpen(false)}>Sign in</Link>}
+        </nav>
       </header>
 
       <main id="top">
         {/* ══ HERO ══ */}
         <section style={{ position: "relative", overflow: "hidden" }}>
-          <div className="field-grid" style={{ position: "absolute", inset: 0, opacity: 0.7, pointerEvents: "none" }} />
-          <div className="container" style={{ position: "relative", padding: "clamp(60px, 10vh, 120px) 24px clamp(48px, 7vh, 80px)", textAlign: "center" }}>
-            <div className="rise badge badge-accent" style={{ marginBottom: 26 }}><span className="dot dot-live" /> Personal AI agents · voice-note updates</div>
+          <div className="aurora" aria-hidden="true" />
+          <div className="field-grid" style={{ position: "absolute", inset: 0, opacity: 0.55, pointerEvents: "none" }} />
+          <div className="container" style={{ position: "relative", padding: "clamp(64px, 10vh, 128px) 24px clamp(48px, 7vh, 84px)", textAlign: "center" }}>
+            <div className="rise badge badge-accent" style={{ marginBottom: 28 }}><span className="dot dot-live" /> Personal AI agents · voice-note updates</div>
 
-            <h1 className="t-display rise-1" style={{ maxWidth: 940, margin: "0 auto 22px" }}>
-              Stay informed —<br /><span style={{ color: "var(--accent)" }}>without reading a thing.</span>
+            <h1 className="t-display rise-1" style={{ maxWidth: 960, margin: "0 auto 24px" }}>
+              Stay informed without<br />
+              <span className="serif" style={{ color: "var(--accent)", fontSize: "1.06em" }}>reading a thing.</span>
             </h1>
 
-            <p className="t-lead rise-2" style={{ maxWidth: 620, margin: "0 auto 20px" }}>
-              Leora deploys AI agents that monitor whatever you care about — markets, your competitors, your team, your hobbies — and send you <strong style={{ color: "var(--ink)" }}>voice-note updates</strong> in your language and voice, right inside Telegram, WhatsApp or the app.
+            <p className="t-lead rise-2" style={{ maxWidth: 640, margin: "0 auto 20px" }}>
+              Leora deploys AI agents that monitor whatever you care about — markets, your competitors, your team, your hobbies — and send you <strong style={{ color: "var(--ink)", fontWeight: 550 }}>voice-note updates</strong> in your language and voice, right inside Telegram, WhatsApp or the app.
             </p>
 
-            <p className="rise-2 t-muted" style={{ fontSize: "0.85rem", marginBottom: 30 }}>Built for busy, high-performing people who need to stay ahead — hands-free.</p>
+            <p className="rise-2 t-muted" style={{ fontSize: "0.85rem", marginBottom: 32 }}>Built for busy, high-performing people who need to stay ahead — hands-free.</p>
 
             <div className="rise-3 row center wrap" style={{ gap: 12, marginBottom: 16 }}>
               {session ? <Link href="/dashboard" className="btn btn-primary btn-lg">Open your dashboard {I.arrow()}</Link> : <button onClick={go} className="btn btn-primary btn-lg">Deploy your first agent {I.arrow()}</button>}
@@ -220,14 +248,17 @@ export default function Landing() {
             </div>
             <div className="rise-3 t-muted" style={{ fontSize: "0.8rem" }}>No credit card · Configure an agent in under a minute</div>
 
-            <div id="preview" className="rise-4" style={{ maxWidth: 940, margin: "52px auto 0", scrollMarginTop: 90 }}><DeliveryPreview /></div>
+            <div id="preview" className="rise-4" style={{ maxWidth: 940, margin: "56px auto 0", scrollMarginTop: 90, position: "relative" }}>
+              <div aria-hidden="true" style={{ position: "absolute", inset: "-8% -12%", background: "radial-gradient(closest-side, var(--accent-glow), transparent 74%)", filter: "blur(50px)", pointerEvents: "none" }} />
+              <div style={{ position: "relative" }}><DeliveryPreview /></div>
+            </div>
           </div>
         </section>
 
         {/* ══ CHANNELS + TOPICS ══ */}
         <section style={{ borderTop: "1px solid var(--line)", borderBottom: "1px solid var(--line)", background: "var(--surface)" }}>
-          <div className="container" style={{ padding: "26px 24px" }}>
-            <div className="row center wrap" style={{ gap: 28, marginBottom: 20 }}>
+          <div className="container" style={{ padding: "28px 24px" }}>
+            <div className="row center wrap" style={{ gap: 28, marginBottom: 22 }}>
               <span className="t-muted" style={{ fontSize: "0.78rem" }}>Delivered where you already are:</span>
               {CHANNELS.map(c => (
                 <span key={c.name} className="row" style={{ gap: 8 }}>
@@ -237,28 +268,34 @@ export default function Landing() {
                 </span>
               ))}
             </div>
-            <div className="hairline" style={{ marginBottom: 20 }} />
-            <div className="row wrap center" style={{ gap: 9 }}>
-              <span className="t-muted" style={{ fontSize: "0.78rem", marginRight: 4 }}>Watching, right now:</span>
-              {TOPICS.map(t => <span key={t} className="chip">{t}</span>)}
+            <div className="hairline" style={{ marginBottom: 22 }} />
+            <div className="marquee">
+              <div className="marquee-track">
+                {[...TOPICS, ...TOPICS].map((t, i) => <span key={`${t}-${i}`} className="chip" style={{ flexShrink: 0 }}>{t}</span>)}
+              </div>
             </div>
+            <p className="t-muted" style={{ fontSize: "0.72rem", textAlign: "center", marginTop: 14 }}>What agents are watching, right now.</p>
           </div>
         </section>
 
         {/* ══ PROBLEM ══ */}
         <section className="section container">
-          <div style={{ maxWidth: 720, margin: "0 auto", textAlign: "center" }}>
-            <div className="eyebrow" style={{ justifyContent: "center", marginBottom: 16 }}>The problem</div>
-            <h2 className="t-h2" style={{ marginBottom: 18 }}>You&apos;re too busy to read the internet.</h2>
-            <p className="t-lead">Staying informed has become a second job — endless tabs, feeds engineered for outrage, and the quiet fear you missed the one thing that mattered. High-performers don&apos;t have the hours. You need the signal, spoken, on your schedule.</p>
-          </div>
-          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18, marginTop: 56 }}>
+          <Reveal>
+            <div style={{ maxWidth: 760, margin: "0 auto", textAlign: "center" }}>
+              <div className="eyebrow no-rule" style={{ justifyContent: "center", marginBottom: 18 }}>The problem</div>
+              <h2 className="t-h2" style={{ marginBottom: 20 }}>You&apos;re too busy to <span className="serif" style={{ fontSize: "1.05em" }}>read the internet.</span></h2>
+              <p className="t-lead">Staying informed has become a second job — endless tabs, feeds engineered for outrage, and the quiet fear you missed the one thing that mattered. High-performers don&apos;t have the hours. You need the signal, spoken, on your schedule.</p>
+            </div>
+          </Reveal>
+          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18, marginTop: 60 }}>
             {FEATURES.map((f, k) => (
-              <div key={k} className="card card-pad card-interactive">
-                <div className="row" style={{ width: 40, height: 40, borderRadius: "var(--r-md)", background: "var(--accent-soft)", color: "var(--accent)", marginBottom: 16, justifyContent: "center" }}>{f.icon()}</div>
-                <div className="t-h3" style={{ fontSize: "1.05rem", marginBottom: 8 }}>{f.t}</div>
-                <p style={{ fontSize: "0.9rem", lineHeight: 1.6, color: "var(--ink-2)" }}>{f.d}</p>
-              </div>
+              <Reveal key={k} delay={k * 90}>
+                <div className="card card-pad card-interactive" style={{ height: "100%" }}>
+                  <div className="row center" style={{ width: 42, height: 42, borderRadius: "var(--r-md)", background: "var(--accent-soft)", color: "var(--accent)", marginBottom: 18 }}>{f.icon()}</div>
+                  <div className="t-h3" style={{ fontSize: "1.05rem", marginBottom: 8 }}>{f.t}</div>
+                  <p style={{ fontSize: "0.9rem", lineHeight: 1.65, color: "var(--ink-2)" }}>{f.d}</p>
+                </div>
+              </Reveal>
             ))}
           </div>
         </section>
@@ -266,21 +303,25 @@ export default function Landing() {
         {/* ══ HOW IT WORKS ══ */}
         <section id="how" className="section" style={{ background: "var(--surface)", borderTop: "1px solid var(--line)", borderBottom: "1px solid var(--line)", scrollMarginTop: 64 }}>
           <div className="container">
-            <div style={{ maxWidth: 620, marginBottom: 56 }}>
-              <div className="eyebrow" style={{ marginBottom: 16 }}>How it works</div>
-              <h2 className="t-h2" style={{ marginBottom: 16 }}>Design it once. Then just listen.</h2>
-              <p className="t-lead">Set an agent up in a minute. It does the reading, the comparing and the deciding — you get the conclusion, spoken.</p>
-            </div>
-            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20 }}>
+            <Reveal>
+              <div style={{ maxWidth: 640, marginBottom: 60 }}>
+                <div className="eyebrow" style={{ marginBottom: 18 }}>How it works</div>
+                <h2 className="t-h2" style={{ marginBottom: 16 }}>Design it once. <span className="serif" style={{ fontSize: "1.05em" }}>Then just listen.</span></h2>
+                <p className="t-lead">Set an agent up in a minute. It does the reading, the comparing and the deciding — you get the conclusion, spoken.</p>
+              </div>
+            </Reveal>
+            <div className="grid how-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24 }}>
               {HOW.map((s, k) => (
-                <div key={k}>
-                  <div className="row between" style={{ marginBottom: 16 }}>
-                    <div className="row center" style={{ width: 44, height: 44, borderRadius: "var(--r-md)", background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--ink)" }}>{s.icon()}</div>
-                    <span className="mono" style={{ fontSize: "0.8rem", color: "var(--ink-4)" }}>0{k + 1}</span>
+                <Reveal key={k} delay={k * 110}>
+                  <div className="how-step" style={{ position: "relative", padding: "26px 24px", borderRadius: "var(--r-lg)", border: "1px solid var(--line)", background: "var(--bg)", height: "100%", transition: "transform 0.25s var(--ease), box-shadow 0.25s var(--ease)" }}>
+                    <div className="row between" style={{ marginBottom: 18 }}>
+                      <div className="row center" style={{ width: 44, height: 44, borderRadius: "var(--r-md)", background: "var(--surface)", border: "1px solid var(--line)", color: "var(--accent)", boxShadow: "var(--shadow-xs)" }}>{s.icon()}</div>
+                      <span className="mono" style={{ fontSize: "0.8rem", color: "var(--ink-4)" }}>0{k + 1}</span>
+                    </div>
+                    <div className="t-h3" style={{ fontSize: "1.15rem", marginBottom: 8 }}>{s.t}</div>
+                    <p style={{ fontSize: "0.92rem", lineHeight: 1.65, color: "var(--ink-2)" }}>{s.d}</p>
                   </div>
-                  <div className="t-h3" style={{ fontSize: "1.15rem", marginBottom: 8 }}>{s.t}</div>
-                  <p style={{ fontSize: "0.92rem", lineHeight: 1.6, color: "var(--ink-2)" }}>{s.d}</p>
-                </div>
+                </Reveal>
               ))}
             </div>
           </div>
@@ -288,92 +329,118 @@ export default function Landing() {
 
         {/* ══ DESIGN YOUR AGENT ══ */}
         <section id="design" className="section container" style={{ scrollMarginTop: 64 }}>
-          <div className="grid" style={{ gridTemplateColumns: "0.95fr 1.05fr", gap: 48, alignItems: "center" }}>
-            <div>
-              <div className="eyebrow" style={{ marginBottom: 16 }}>Your agents, your way</div>
-              <h2 className="t-h2" style={{ marginBottom: 16 }}>Every agent is yours to design.</h2>
-              <p className="t-lead" style={{ marginBottom: 24 }}>The whole product is the configuration: tell an agent what to watch, how to sound, and when to reach you. It adapts everything else.</p>
+          <div className="grid design-split" style={{ gridTemplateColumns: "0.95fr 1.05fr", gap: 56, alignItems: "center" }}>
+            <Reveal>
+              <div className="eyebrow" style={{ marginBottom: 18 }}>Your agents, your way</div>
+              <h2 className="t-h2" style={{ marginBottom: 16 }}>Every agent is <span className="serif" style={{ fontSize: "1.05em" }}>yours to design.</span></h2>
+              <p className="t-lead" style={{ marginBottom: 28 }}>The whole product is the configuration: tell an agent what to watch, how to sound, and when to reach you. It adapts everything else.</p>
               {session ? <Link href="/dashboard" className="btn btn-primary">Design an agent {I.arrow()}</Link> : <button onClick={go} className="btn btn-primary">Design an agent {I.arrow()}</button>}
-            </div>
+            </Reveal>
             {/* config mock */}
-            <div className="card" style={{ padding: 24 }}>
-              <div className="row between" style={{ marginBottom: 16 }}>
-                <div className="row" style={{ gap: 10 }}><span className="row center" style={{ width: 34, height: 34, borderRadius: "var(--r-sm)", background: "var(--surface-2)", border: "1px solid var(--line)", fontSize: 16 }}>📈</span><input className="input" defaultValue="Semiconductor supply chain" style={{ height: 36, width: 220 }} readOnly /></div>
-                <span className="badge badge-accent"><span className="dot dot-live" /> Live</span>
-              </div>
-              {CONFIG.map((c, k) => (
-                <div key={k} className="row between" style={{ padding: "11px 0", borderTop: "1px solid var(--line)" }}>
-                  <span style={{ fontSize: "0.8rem", color: "var(--ink-3)" }}>{c.label}</span>
-                  <span style={{ fontSize: "0.82rem", fontWeight: 500, textAlign: "right", maxWidth: 260 }}>{c.value}</span>
+            <Reveal delay={120}>
+              <div className="card" style={{ padding: 26, boxShadow: "var(--shadow-lg)", borderRadius: "var(--r-xl)" }}>
+                <div className="row between wrap" style={{ marginBottom: 16, gap: 10 }}>
+                  <div className="row" style={{ gap: 10 }}><span className="row center" style={{ width: 34, height: 34, borderRadius: "var(--r-sm)", background: "var(--surface-2)", border: "1px solid var(--line)", fontSize: 16 }}>📈</span><input className="input" defaultValue="Semiconductor supply chain" style={{ height: 36, width: 220 }} readOnly aria-label="Agent topic" /></div>
+                  <span className="badge badge-accent"><span className="dot dot-live" /> Live</span>
                 </div>
-              ))}
-              <div className="row" style={{ gap: 8, marginTop: 16 }}>
-                <span className="chip" style={{ background: "var(--accent-soft)", borderColor: "var(--accent-line)", color: "var(--accent-ink)" }}>{I.tg()} Telegram</span>
-                <span className="chip">{I.mic()} Analytical voice</span>
-                <span className="chip">{I.clock()} 8:00 AM</span>
+                {CONFIG.map((c, k) => (
+                  <div key={k} className="row between" style={{ padding: "12px 0", borderTop: "1px solid var(--line)", gap: 16 }}>
+                    <span style={{ fontSize: "0.8rem", color: "var(--ink-3)", flexShrink: 0 }}>{c.label}</span>
+                    <span style={{ fontSize: "0.82rem", fontWeight: 500, textAlign: "right" }}>{c.value}</span>
+                  </div>
+                ))}
+                <div className="row wrap" style={{ gap: 8, marginTop: 18 }}>
+                  <span className="chip" style={{ background: "var(--accent-soft)", borderColor: "var(--accent-line)", color: "var(--accent-ink)" }}>{I.tg()} Telegram</span>
+                  <span className="chip">{I.mic()} Analytical voice</span>
+                  <span className="chip">{I.clock()} 8:00 AM</span>
+                </div>
               </div>
-            </div>
+            </Reveal>
           </div>
         </section>
 
         {/* ══ USE CASES ══ */}
         <section className="section" style={{ background: "var(--surface)", borderTop: "1px solid var(--line)", borderBottom: "1px solid var(--line)" }}>
           <div className="container">
-            <div style={{ textAlign: "center", maxWidth: 560, margin: "0 auto 48px" }}>
-              <div className="eyebrow" style={{ justifyContent: "center", marginBottom: 16 }}>Who it&apos;s for</div>
-              <h2 className="t-h2">Made for people with no time to spare.</h2>
-            </div>
+            <Reveal>
+              <div style={{ textAlign: "center", maxWidth: 560, margin: "0 auto 52px" }}>
+                <div className="eyebrow no-rule" style={{ justifyContent: "center", marginBottom: 18 }}>Who it&apos;s for</div>
+                <h2 className="t-h2">Made for people with <span className="serif" style={{ fontSize: "1.05em" }}>no time to spare.</span></h2>
+              </div>
+            </Reveal>
             <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
               {USECASES.map((u, k) => (
-                <div key={k} className="card card-pad" style={{ padding: 22 }}>
-                  <div style={{ fontSize: "0.95rem", fontWeight: 600, letterSpacing: "-0.01em", marginBottom: 6 }}>{u.t}</div>
-                  <p style={{ fontSize: "0.85rem", lineHeight: 1.55, color: "var(--ink-2)" }}>{u.d}</p>
-                </div>
+                <Reveal key={k} delay={k * 80}>
+                  <div className="card card-interactive" style={{ padding: 24, height: "100%" }}>
+                    <div style={{ fontSize: "1.4rem", marginBottom: 12 }} aria-hidden="true">{u.e}</div>
+                    <div style={{ fontSize: "0.95rem", fontWeight: 600, letterSpacing: "-0.01em", marginBottom: 6 }}>{u.t}</div>
+                    <p style={{ fontSize: "0.85rem", lineHeight: 1.6, color: "var(--ink-2)" }}>{u.d}</p>
+                  </div>
+                </Reveal>
               ))}
             </div>
           </div>
         </section>
 
-        {/* ══ TESTIMONIAL ══ */}
+        {/* ══ TESTIMONIALS ══ */}
         <section className="section container">
-          <div style={{ maxWidth: 820, margin: "0 auto", textAlign: "center" }}>
-            <div className="t-h2" style={{ fontWeight: 500, letterSpacing: "-0.02em", lineHeight: 1.3 }}>
-              “I get a two-minute voice note over my morning coffee and I&apos;m fully briefed on my market. <span style={{ color: "var(--accent)" }}>I haven&apos;t opened a news tab in weeks.</span>”
+          <Reveal>
+            <div style={{ maxWidth: 840, margin: "0 auto", textAlign: "center" }}>
+              <div className="t-h2" style={{ fontWeight: 500, letterSpacing: "-0.022em", lineHeight: 1.32 }}>
+                <span className="serif" aria-hidden="true" style={{ color: "var(--accent)", fontSize: "1.4em", verticalAlign: "-0.1em", marginRight: 6 }}>“</span>
+                I get a two-minute voice note over my morning coffee and I&apos;m fully briefed on my market. <span style={{ color: "var(--accent)" }}>I haven&apos;t opened a news tab in weeks.</span>
+                <span className="serif" aria-hidden="true" style={{ color: "var(--accent)", fontSize: "1.4em", verticalAlign: "-0.1em", marginLeft: 6 }}>”</span>
+              </div>
+              <div className="row center" style={{ gap: 12, marginTop: 32 }}>
+                <span className="row center" style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--accent-soft)", border: "1px solid var(--accent-line)", color: "var(--accent-ink)", fontWeight: 600, fontSize: "0.85rem" }}>EA</span>
+                <div style={{ textAlign: "left" }}><div style={{ fontSize: "0.88rem", fontWeight: 600 }}>{QUOTES[0].who}</div><div style={{ fontSize: "0.78rem", color: "var(--ink-3)" }}>{QUOTES[0].role}</div></div>
+              </div>
             </div>
-            <div className="row center" style={{ gap: 12, marginTop: 32 }}>
-              <span style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--surface-3)", border: "1px solid var(--line)" }} />
-              <div style={{ textAlign: "left" }}><div style={{ fontSize: "0.88rem", fontWeight: 600 }}>Early access member</div><div style={{ fontSize: "0.78rem", color: "var(--ink-3)" }}>Founder · B2B SaaS</div></div>
-            </div>
+          </Reveal>
+          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginTop: 56, maxWidth: 880, marginLeft: "auto", marginRight: "auto" }}>
+            {QUOTES.slice(1).map((t, k) => (
+              <Reveal key={k} delay={k * 100}>
+                <div className="card" style={{ padding: 24, height: "100%" }}>
+                  <p style={{ fontSize: "0.92rem", lineHeight: 1.65, color: "var(--ink-2)", marginBottom: 18 }}>“{t.q}”</p>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 600 }}>{t.who}</div>
+                  <div style={{ fontSize: "0.74rem", color: "var(--ink-3)" }}>{t.role}</div>
+                </div>
+              </Reveal>
+            ))}
           </div>
         </section>
 
         {/* ══ PRICING ══ */}
         <section id="pricing" className="section" style={{ background: "var(--surface)", borderTop: "1px solid var(--line)", borderBottom: "1px solid var(--line)", scrollMarginTop: 64 }}>
           <div className="container">
-            <div style={{ textAlign: "center", maxWidth: 560, margin: "0 auto 56px" }}>
-              <div className="eyebrow" style={{ justifyContent: "center", marginBottom: 16 }}>Pricing</div>
-              <h2 className="t-h2" style={{ marginBottom: 14 }}>Start free. Upgrade when it&apos;s indispensable.</h2>
-              <p className="t-lead">Honest pricing. No lock-in, cancel anytime.</p>
-            </div>
-            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18, maxWidth: 960, margin: "0 auto" }}>
-              {PRICING.map((p) => (
-                <div key={p.name} className="card" style={{ padding: 28, position: "relative", borderColor: p.primary ? "var(--accent-line)" : "var(--line)", boxShadow: p.primary ? "var(--shadow-lg)" : "var(--shadow-sm)" }}>
-                  {p.primary && <span className="badge badge-accent" style={{ position: "absolute", top: 20, right: 20 }}>Most popular</span>}
-                  <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--ink-2)" }}>{p.name}</div>
-                  <div className="row" style={{ gap: 6, alignItems: "baseline", margin: "10px 0 20px" }}>
-                    <span style={{ fontSize: "2.4rem", fontWeight: 600, letterSpacing: "-0.03em" }}>{p.price}</span>
-                    <span className="t-muted" style={{ fontSize: "0.85rem" }}>{p.note}</span>
+            <Reveal>
+              <div style={{ textAlign: "center", maxWidth: 560, margin: "0 auto 60px" }}>
+                <div className="eyebrow no-rule" style={{ justifyContent: "center", marginBottom: 18 }}>Pricing</div>
+                <h2 className="t-h2" style={{ marginBottom: 14 }}>Start free. Upgrade when it&apos;s <span className="serif" style={{ fontSize: "1.05em" }}>indispensable.</span></h2>
+                <p className="t-lead">Honest pricing. No lock-in, cancel anytime.</p>
+              </div>
+            </Reveal>
+            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18, maxWidth: 980, margin: "0 auto", alignItems: "stretch" }}>
+              {PRICING.map((p, k) => (
+                <Reveal key={p.name} delay={k * 90} style={{ height: "100%" }}>
+                  <div className={`card ${p.primary ? "card-featured" : ""}`} style={{ padding: 30, position: "relative", height: "100%", display: "flex", flexDirection: "column", borderRadius: "var(--r-xl)" }}>
+                    {p.primary && <span className="badge badge-accent" style={{ position: "absolute", top: 22, right: 22 }}>Most popular</span>}
+                    <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--ink-2)" }}>{p.name}</div>
+                    <div className="row" style={{ gap: 6, alignItems: "baseline", margin: "10px 0 22px" }}>
+                      <span style={{ fontSize: "2.5rem", fontWeight: 600, letterSpacing: "-0.035em" }}>{p.price}</span>
+                      <span className="t-muted" style={{ fontSize: "0.85rem" }}>{p.note}</span>
+                    </div>
+                    <div className="col" style={{ gap: 12, marginBottom: 28, flex: 1 }}>
+                      {p.feats.map(f => (
+                        <div key={f} className="row" style={{ gap: 9 }}>
+                          <span className="row center" style={{ width: 18, height: 18, borderRadius: "50%", background: "var(--accent-soft)", color: "var(--accent)", flexShrink: 0 }}>{I.check()}</span>
+                          <span style={{ fontSize: "0.87rem", color: "var(--ink-2)" }}>{f}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={go} className={`btn ${p.primary ? "btn-primary" : "btn-secondary"}`} style={{ width: "100%" }}>{p.cta}</button>
                   </div>
-                  <div className="col" style={{ gap: 11, marginBottom: 24 }}>
-                    {p.feats.map(f => (
-                      <div key={f} className="row" style={{ gap: 9 }}>
-                        <span className="row center" style={{ width: 18, height: 18, borderRadius: "50%", background: "var(--accent-soft)", color: "var(--accent)", flexShrink: 0 }}>{I.check()}</span>
-                        <span style={{ fontSize: "0.87rem", color: "var(--ink-2)" }}>{f}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <button onClick={go} className={`btn ${p.primary ? "btn-primary" : "btn-secondary"}`} style={{ width: "100%" }}>{p.cta}</button>
-                </div>
+                </Reveal>
               ))}
             </div>
           </div>
@@ -382,71 +449,98 @@ export default function Landing() {
         {/* ══ FAQ ══ */}
         <section id="faq" className="section container" style={{ scrollMarginTop: 64 }}>
           <div style={{ maxWidth: 760, margin: "0 auto" }}>
-            <div style={{ textAlign: "center", marginBottom: 48 }}>
-              <div className="eyebrow" style={{ justifyContent: "center", marginBottom: 16 }}>Questions</div>
-              <h2 className="t-h2">Good to know.</h2>
-            </div>
-            <div className="card" style={{ overflow: "hidden" }}>
-              {FAQ.map((f, k) => (
-                <div key={k} style={{ borderTop: k ? "1px solid var(--line)" : "none" }}>
-                  <button onClick={() => setOpenFaq(openFaq === k ? null : k)} className="row between" style={{ width: "100%", padding: "20px 24px", background: "none", border: "none", cursor: "pointer", textAlign: "left", color: "var(--ink)" }}>
-                    <span style={{ fontSize: "0.98rem", fontWeight: 550, letterSpacing: "-0.01em" }}>{f.q}</span>
-                    <span style={{ transform: openFaq === k ? "rotate(45deg)" : "none", transition: "transform 0.2s var(--ease)", fontSize: "1.3rem", color: "var(--ink-3)", flexShrink: 0, lineHeight: 1 }}>+</span>
-                  </button>
-                  {openFaq === k && <p style={{ padding: "0 24px 22px", fontSize: "0.92rem", lineHeight: 1.65, color: "var(--ink-2)", maxWidth: 620, animation: "fade 0.2s ease both" }}>{f.a}</p>}
-                </div>
-              ))}
-            </div>
+            <Reveal>
+              <div style={{ textAlign: "center", marginBottom: 48 }}>
+                <div className="eyebrow no-rule" style={{ justifyContent: "center", marginBottom: 18 }}>Questions</div>
+                <h2 className="t-h2">Good to know.</h2>
+              </div>
+            </Reveal>
+            <Reveal delay={80}>
+              <div className="card" style={{ overflow: "hidden", borderRadius: "var(--r-xl)" }}>
+                {FAQ.map((f, k) => (
+                  <div key={k} style={{ borderTop: k ? "1px solid var(--line)" : "none" }}>
+                    <button
+                      onClick={() => setOpenFaq(openFaq === k ? null : k)}
+                      aria-expanded={openFaq === k}
+                      className="row between faq-q"
+                      style={{ width: "100%", padding: "20px 26px", background: "none", border: "none", cursor: "pointer", textAlign: "left", color: "var(--ink)", gap: 16 }}
+                    >
+                      <span style={{ fontSize: "0.98rem", fontWeight: 550, letterSpacing: "-0.01em" }}>{f.q}</span>
+                      <span aria-hidden="true" style={{ transform: openFaq === k ? "rotate(45deg)" : "none", transition: "transform 0.25s var(--ease)", fontSize: "1.3rem", color: "var(--ink-3)", flexShrink: 0, lineHeight: 1 }}>+</span>
+                    </button>
+                    <div className="faq-a" data-open={openFaq === k}>
+                      <div><p style={{ padding: "0 26px 22px", fontSize: "0.92rem", lineHeight: 1.7, color: "var(--ink-2)", maxWidth: 620 }}>{f.a}</p></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Reveal>
           </div>
         </section>
 
         {/* ══ CTA ══ */}
         <section className="section container">
-          <div className="card" style={{ padding: "clamp(40px, 6vw, 72px)", textAlign: "center", position: "relative", overflow: "hidden", background: "var(--surface)" }}>
-            <div className="field-grid" style={{ position: "absolute", inset: 0, opacity: 0.6, pointerEvents: "none" }} />
-            <div style={{ position: "relative" }}>
-              <h2 className="t-h1" style={{ maxWidth: 640, margin: "0 auto 16px" }}>Deploy an agent. Get your first voice note by morning.</h2>
-              <p className="t-lead" style={{ maxWidth: 500, margin: "0 auto 32px" }}>Free to start. Design your agent in a minute and never open a news tab again.</p>
-              <div className="row center wrap" style={{ gap: 12, marginBottom: 28 }}>
-                {session ? <Link href="/dashboard" className="btn btn-primary btn-lg">Open your dashboard {I.arrow()}</Link> : <button onClick={go} className="btn btn-primary btn-lg">Continue with Google {I.arrow()}</button>}
-              </div>
-              <div className="col center" style={{ gap: 8 }}>
-                <span className="t-muted" style={{ fontSize: "0.78rem" }}>Or join the early-access list</span>
-                <WaitlistForm source="landing-cta" />
+          <Reveal>
+            <div className="card" style={{ padding: "clamp(44px, 6vw, 80px)", textAlign: "center", position: "relative", overflow: "hidden", background: "var(--surface)", borderRadius: "var(--r-2xl)" }}>
+              <div className="aurora" aria-hidden="true" />
+              <div className="field-grid" style={{ position: "absolute", inset: 0, opacity: 0.5, pointerEvents: "none" }} />
+              <div style={{ position: "relative" }}>
+                <h2 className="t-h1" style={{ maxWidth: 680, margin: "0 auto 16px" }}>Deploy an agent. Get your first voice note <span className="serif" style={{ fontSize: "1.05em", color: "var(--accent)" }}>by morning.</span></h2>
+                <p className="t-lead" style={{ maxWidth: 500, margin: "0 auto 34px" }}>Free to start. Design your agent in a minute and never open a news tab again.</p>
+                <div className="row center wrap" style={{ gap: 12, marginBottom: 30 }}>
+                  {session ? <Link href="/dashboard" className="btn btn-primary btn-lg">Open your dashboard {I.arrow()}</Link> : <button onClick={go} className="btn btn-primary btn-lg">Continue with Google {I.arrow()}</button>}
+                </div>
+                <div className="col center" style={{ gap: 10 }}>
+                  <span className="t-muted" style={{ fontSize: "0.78rem" }}>Or join the early-access list</span>
+                  <WaitlistForm source="landing-cta" />
+                </div>
               </div>
             </div>
-          </div>
+          </Reveal>
         </section>
       </main>
 
       {/* ══ FOOTER ══ */}
       <footer style={{ borderTop: "1px solid var(--line)", background: "var(--surface)" }}>
-        <div className="container" style={{ padding: "48px 24px 32px" }}>
-          <div className="row between wrap" style={{ gap: 24, alignItems: "flex-start" }}>
+        <div className="container" style={{ padding: "52px 24px 32px" }}>
+          <div className="row between wrap" style={{ gap: 32, alignItems: "flex-start" }}>
             <div style={{ maxWidth: 320 }}>
-              <div className="row" style={{ gap: 10, marginBottom: 12 }}><Logo /><span style={{ fontWeight: 600, letterSpacing: "-0.02em" }}>Leora</span></div>
-              <p style={{ fontSize: "0.85rem", color: "var(--ink-3)", lineHeight: 1.6 }}>Deploy AI agents that monitor what matters and brief you by voice — in your app, Telegram or WhatsApp. Made for busy minds.</p>
+              <div className="row" style={{ gap: 10, marginBottom: 14 }}><Logo /><span style={{ fontWeight: 600, letterSpacing: "-0.02em" }}>Leora</span></div>
+              <p style={{ fontSize: "0.85rem", color: "var(--ink-3)", lineHeight: 1.65 }}>Deploy AI agents that monitor what matters and brief you by voice — in your app, Telegram or WhatsApp. Made for busy minds.</p>
             </div>
             <div className="row wrap" style={{ gap: 56, alignItems: "flex-start" }}>
               {[
-                { h: "Product", links: ["How it works", "Your agents", "Pricing", "FAQ"] },
-                { h: "Company", links: ["About", "Blog", "Careers", "Contact"] },
-                { h: "Legal", links: ["Privacy", "Terms", "Security"] },
+                { h: "Product", links: [["How it works", "#how"], ["Your agents", "#design"], ["Pricing", "#pricing"], ["FAQ", "#faq"]] },
+                { h: "Company", links: [["About", "#"], ["Blog", "#"], ["Careers", "#"], ["Contact", "#"]] },
+                { h: "Legal", links: [["Privacy", "#"], ["Terms", "#"], ["Security", "#"]] },
               ].map(col => (
-                <div key={col.h} className="col" style={{ gap: 10 }}>
+                <div key={col.h} className="col" style={{ gap: 11 }}>
                   <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--ink)", marginBottom: 2 }}>{col.h}</div>
-                  {col.links.map(l => <a key={l} href="#" style={{ fontSize: "0.84rem", color: "var(--ink-3)" }} className="nav-link">{l}</a>)}
+                  {col.links.map(([l, h]) => <a key={l} href={h} style={{ fontSize: "0.84rem", color: "var(--ink-3)" }} className="nav-link">{l}</a>)}
                 </div>
               ))}
             </div>
           </div>
-          <div className="hairline" style={{ margin: "32px 0 20px" }} />
+          <div className="hairline" style={{ margin: "36px 0 20px" }} />
           <div className="row between wrap" style={{ gap: 12 }}>
             <span style={{ fontSize: "0.8rem", color: "var(--ink-4)" }}>© {new Date().getFullYear()} Leora. All rights reserved.</span>
-            <span style={{ fontSize: "0.8rem", color: "var(--ink-4)" }}>Listen, don&apos;t scroll.</span>
+            <span className="serif" style={{ fontSize: "0.92rem", color: "var(--ink-3)" }}>Listen, don&apos;t scroll.</span>
           </div>
         </div>
       </footer>
+
+      <style>{`
+        .how-step:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+        .faq-q:hover span:first-child { color: var(--accent-ink); }
+        @media (max-width: 780px) {
+          .preview-grid { grid-template-columns: 1fr !important; }
+          .preview-grid > div:first-child { border-right: none !important; border-bottom: 1px solid var(--line); }
+          .design-split { grid-template-columns: 1fr !important; gap: 32px !important; }
+        }
+        @media (max-width: 520px) {
+          .waitlist-row { flex-direction: column; }
+        }
+      `}</style>
     </div>
   );
 }

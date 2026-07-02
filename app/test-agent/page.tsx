@@ -142,123 +142,131 @@ export default function Ask() {
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <AppNav />
-      <main className="container" style={{ maxWidth: 720, padding: "48px 24px 90px" }}>
-        <div className="rise" style={{ marginBottom: 28, textAlign: "center" }}>
-          <div className="badge badge-accent" style={{ marginBottom: 16 }}><span className="dot dot-live" /> Live web · on demand</div>
-          <h1 className="t-h1" style={{ marginBottom: 12 }}>Ask, and get a voice note.</h1>
-          <p className="t-lead" style={{ maxWidth: 520, margin: "0 auto" }}>Name any topic. An agent reads the latest across the web and sends you a studio-quality voice note — in your language and voice, in seconds. It&apos;s exactly what your deployed agents deliver on autopilot.</p>
-        </div>
-
-        <div className="card card-pad rise-1" style={{ padding: 28 }}>
-          {/* Ask input */}
-          <div className="row" style={{ gap: 10, marginBottom: 22 }}>
-            <input
-              autoFocus value={topic} onChange={e => setTopic(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleGenerate()} disabled={isLoading}
-              placeholder="e.g. What changed in AI chips this week?"
-              className="input" style={{ height: 50, fontSize: "0.95rem" }}
-            />
-            <button onClick={handleGenerate} disabled={isLoading || !topic.trim()} className="btn btn-primary btn-lg" style={{ flexShrink: 0 }}>
-              {isLoading ? <><span className="spinner" style={{ width: 15, height: 15, borderTopColor: "var(--solid-ink)" }} /> Working…</> : "Generate brief"}
-            </button>
+      <div style={{ position: "relative", overflow: "hidden" }}>
+        <div className="aurora" aria-hidden="true" />
+        <main className="container" style={{ maxWidth: 720, padding: "52px 24px 96px", position: "relative" }}>
+          <div className="rise" style={{ marginBottom: 32, textAlign: "center" }}>
+            <div className="badge badge-accent" style={{ marginBottom: 18 }}><span className="dot dot-live" /> Live web · on demand</div>
+            <h1 className="t-h1" style={{ marginBottom: 14 }}>Ask, and get <span className="serif" style={{ fontSize: "1.05em", color: "var(--accent)" }}>a voice note.</span></h1>
+            <p className="t-lead" style={{ maxWidth: 540, margin: "0 auto" }}>Name any topic. An agent reads the latest across the web and sends you a studio-quality voice note — in your language and voice, in seconds. It&apos;s exactly what your deployed agents deliver on autopilot.</p>
           </div>
 
-          {/* Language */}
-          <div style={{ marginBottom: 18 }}>
-            <div className="eyebrow" style={{ marginBottom: 10 }}>Language</div>
-            <div className="row wrap" style={{ gap: 8 }}>
-              {LANGS.map(l => <button key={l.code} type="button" disabled={isLoading} onClick={() => setLang(l.code)} style={chip(lang === l.code)}>{l.label}</button>)}
-            </div>
-          </div>
-
-          {/* Voice tone */}
-          <div style={{ marginBottom: 24 }}>
-            <div className="row between" style={{ marginBottom: 10 }}>
-              <div className="eyebrow">Voice</div>
-              <button type="button" onClick={testVoice} className="btn btn-ghost btn-sm" style={{ color: "var(--accent-ink)" }}>
-                {voiceTesting ? "◼ Stop preview" : "▶ Preview voice"}
+          <div className="card rise-1" style={{ padding: 28, borderRadius: "var(--r-xl)", boxShadow: "var(--shadow-lg)" }}>
+            {/* Ask input */}
+            <div className="ask-compose" style={{ display: "flex", gap: 10, marginBottom: 24 }}>
+              <input
+                autoFocus value={topic} onChange={e => setTopic(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleGenerate()} disabled={isLoading}
+                placeholder="e.g. What changed in AI chips this week?"
+                className="input" style={{ height: 52, fontSize: "0.95rem", borderRadius: "var(--r-md)" }}
+              />
+              <button onClick={handleGenerate} disabled={isLoading || !topic.trim()} className="btn btn-primary btn-lg" style={{ flexShrink: 0 }}>
+                {isLoading ? <><span className="spinner" style={{ width: 15, height: 15, borderTopColor: "var(--solid-ink)" }} /> Working…</> : "Generate brief"}
               </button>
             </div>
-            <div className="row wrap" style={{ gap: 8 }}>
-              {TONES.map(t => <button key={t.name} type="button" disabled={isLoading} onClick={() => setTone(t.name)} style={chip(tone === t.name)}>{t.name}</button>)}
-            </div>
-          </div>
 
-          {/* Progress */}
-          {(isLoading || step === 4) && (
-            <div className="col" style={{ gap: 12, marginBottom: 22 }}>
+            {/* Language */}
+            <div style={{ marginBottom: 18 }}>
+              <div className="eyebrow no-rule" style={{ marginBottom: 10 }}>Language</div>
               <div className="row wrap" style={{ gap: 8 }}>
-                {STEP_STAGES.map(({ n, label }) => {
-                  const done = step > n, active = step === n;
-                  return (
-                    <span key={n} className={`badge ${done ? "badge-accent" : active ? "badge-info" : "badge-muted"}`}>
-                      {done ? "✓" : active ? <span className="spinner" style={{ width: 12, height: 12 }} /> : n} {label}
-                    </span>
-                  );
-                })}
+                {LANGS.map(l => <button key={l.code} type="button" disabled={isLoading} onClick={() => setLang(l.code)} style={chip(lang === l.code)}>{l.label}</button>)}
               </div>
-              <div style={{ height: 5, borderRadius: 99, background: "var(--surface-3)", overflow: "hidden" }}>
-                <div style={{ height: "100%", borderRadius: 99, background: "var(--accent)", width: progressWidth, transition: "width 0.6s var(--ease)" }} />
+            </div>
+
+            {/* Voice tone */}
+            <div style={{ marginBottom: 24 }}>
+              <div className="row between" style={{ marginBottom: 10 }}>
+                <div className="eyebrow no-rule">Voice</div>
+                <button type="button" onClick={testVoice} className="btn btn-ghost btn-sm" style={{ color: "var(--accent-ink)" }}>
+                  {voiceTesting ? "◼ Stop preview" : "▶ Preview voice"}
+                </button>
               </div>
-              <span className="thinking" style={{ fontSize: "0.82rem", fontWeight: 500 }}>{STEP_LABELS[step]}</span>
+              <div className="row wrap" style={{ gap: 8 }}>
+                {TONES.map(t => <button key={t.name} type="button" disabled={isLoading} onClick={() => setTone(t.name)} style={chip(tone === t.name)}>{t.name}</button>)}
+              </div>
             </div>
-          )}
 
-          {/* Error */}
-          {error && (
-            <div className="card" style={{ padding: "14px 16px", marginBottom: 20, background: "var(--danger-soft)", borderColor: "var(--danger)", boxShadow: "none" }}>
-              <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--danger)", marginBottom: 3 }}>Generation failed</div>
-              <div style={{ fontSize: "0.85rem", color: "var(--ink-2)" }}>{error}</div>
-            </div>
-          )}
-
-          {/* Result */}
-          {audioUrl && step === 4 && (
-            <div className="card" style={{ padding: 22, background: "var(--accent-soft)", borderColor: "var(--accent-line)", boxShadow: "none", animation: "rise 0.4s var(--ease) both" }}>
-              <div className="row" style={{ gap: 12, marginBottom: 16 }}>
-                <span className="row center" style={{ width: 42, height: 42, borderRadius: "var(--r-md)", background: "var(--surface)", border: "1px solid var(--accent-line)", flexShrink: 0, fontSize: 18 }}>🎧</span>
-                <div>
-                  <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--accent-ink)" }}>Your voice note is ready</div>
-                  <div style={{ fontSize: "0.78rem", color: "var(--ink-3)", marginTop: 1 }}>{audioName}</div>
+            {/* Progress */}
+            {(isLoading || step === 4) && (
+              <div className="col" style={{ gap: 12, marginBottom: 22, animation: "riseSm 0.3s var(--ease) both" }}>
+                <div className="row wrap" style={{ gap: 8 }}>
+                  {STEP_STAGES.map(({ n, label }) => {
+                    const done = step > n, active = step === n;
+                    return (
+                      <span key={n} className={`badge ${done ? "badge-accent" : active ? "badge-info" : "badge-muted"}`}>
+                        {done ? "✓" : active ? <span className="spinner" style={{ width: 12, height: 12 }} /> : n} {label}
+                      </span>
+                    );
+                  })}
                 </div>
-                <span className="badge badge-accent" style={{ marginLeft: "auto" }}><span className="dot" /> Ready</span>
+                <div style={{ height: 5, borderRadius: 99, background: "var(--surface-3)", overflow: "hidden" }}>
+                  <div style={{ height: "100%", borderRadius: 99, background: "linear-gradient(90deg, var(--accent-strong), var(--accent))", width: progressWidth, transition: "width 0.6s var(--ease)" }} />
+                </div>
+                <span className="thinking" style={{ fontSize: "0.82rem", fontWeight: 500 }}>{STEP_LABELS[step]}</span>
               </div>
-              <Waveform active />
-              <audio ref={audioRef} src={audioUrl} controls style={{ width: "100%", marginTop: 16, accentColor: "var(--accent)" }} />
-              <div className="row" style={{ gap: 10, marginTop: 16 }}>
-                <button onClick={handleDownload} className="btn btn-primary" style={{ flex: 1 }}>Download MP3</button>
-                {tgConnected && (
-                  <button onClick={handleSendTelegram} disabled={tgSending} className={`btn ${tgSent ? "btn-accent" : "btn-secondary"}`} style={{ flex: 1 }}>
-                    {tgSent ? "✓ Sent" : tgSending ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Sending…</> : <><TgIcon size={15} color="#229ED9" /> Send to Telegram</>}
-                  </button>
+            )}
+
+            {/* Error */}
+            {error && (
+              <div className="card" style={{ padding: "14px 16px", marginBottom: 20, background: "var(--danger-soft)", borderColor: "var(--danger)", boxShadow: "none", animation: "riseSm 0.25s var(--ease) both" }}>
+                <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--danger)", marginBottom: 3 }}>Generation failed</div>
+                <div style={{ fontSize: "0.85rem", color: "var(--ink-2)" }}>{error}</div>
+              </div>
+            )}
+
+            {/* Result */}
+            {audioUrl && step === 4 && (
+              <div className="card" style={{ padding: 22, background: "var(--accent-soft)", borderColor: "var(--accent-line)", boxShadow: "none", animation: "rise 0.4s var(--ease) both" }}>
+                <div className="row" style={{ gap: 12, marginBottom: 16 }}>
+                  <span className="row center" style={{ width: 42, height: 42, borderRadius: "var(--r-md)", background: "var(--surface)", border: "1px solid var(--accent-line)", flexShrink: 0, fontSize: 18 }}>🎧</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--accent-ink)" }}>Your voice note is ready</div>
+                    <div style={{ fontSize: "0.78rem", color: "var(--ink-3)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{audioName}</div>
+                  </div>
+                  <span className="badge badge-accent" style={{ marginLeft: "auto", flexShrink: 0 }}><span className="dot" /> Ready</span>
+                </div>
+                <Waveform active />
+                <audio ref={audioRef} src={audioUrl} controls style={{ width: "100%", marginTop: 16, accentColor: "var(--accent)" }} />
+                <div className="row wrap" style={{ gap: 10, marginTop: 16 }}>
+                  <button onClick={handleDownload} className="btn btn-primary" style={{ flex: 1, minWidth: 150 }}>Download MP3</button>
+                  {tgConnected && (
+                    <button onClick={handleSendTelegram} disabled={tgSending} className={`btn ${tgSent ? "btn-accent" : "btn-secondary"}`} style={{ flex: 1, minWidth: 150 }}>
+                      {tgSent ? "✓ Sent" : tgSending ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Sending…</> : <><TgIcon size={15} color="#229ED9" /> Send to Telegram</>}
+                    </button>
+                  )}
+                </div>
+                {tgError && <div style={{ marginTop: 12, fontSize: "0.8rem", color: "var(--danger)" }}>{tgError}</div>}
+                {!tgConnected && (
+                  <Link href="/delivery" className="row center" style={{ marginTop: 12, height: 38, borderRadius: "var(--r-sm)", border: "1px dashed var(--info-line)", color: "var(--info)", fontSize: "0.8rem", fontWeight: 500, gap: 7 }}>
+                    <TgIcon size={13} /> Connect Telegram to send voice notes directly
+                  </Link>
                 )}
               </div>
-              {tgError && <div style={{ marginTop: 12, fontSize: "0.8rem", color: "var(--danger)" }}>{tgError}</div>}
-              {!tgConnected && (
-                <Link href="/delivery" className="row center" style={{ marginTop: 12, height: 38, borderRadius: "var(--r-sm)", border: "1px dashed var(--info-line)", color: "var(--info)", fontSize: "0.8rem", fontWeight: 500, gap: 7 }}>
-                  <TgIcon size={13} /> Connect Telegram to send voice notes directly
-                </Link>
-              )}
-            </div>
-          )}
+            )}
 
-          {step === 0 && !error && (
-            <p className="t-muted" style={{ fontSize: "0.78rem", textAlign: "center", margin: 0 }}>Typical generation takes 15–45 seconds · Live web via Tavily + neural TTS</p>
-          )}
-        </div>
-
-        {/* Suggestions */}
-        <div className="rise-2" style={{ marginTop: 24 }}>
-          <div className="eyebrow" style={{ marginBottom: 12, justifyContent: "center" }}>Try asking</div>
-          <div className="row wrap center" style={{ gap: 8 }}>
-            {["Latest in AI chips", "This week in crypto", "New research on longevity", "Premier League transfer news", "Fed rate outlook"].map(s => (
-              <button key={s} onClick={() => setTopic(s)} className="chip" style={{ cursor: "pointer" }}>{s}</button>
-            ))}
+            {step === 0 && !error && (
+              <p className="t-muted" style={{ fontSize: "0.78rem", textAlign: "center", margin: 0 }}>Typical generation takes 15–45 seconds · Live web via Tavily + neural TTS</p>
+            )}
           </div>
-        </div>
-      </main>
 
-      <style>{`@keyframes wave { from { transform: scaleY(0.4); opacity: 0.6; } to { transform: scaleY(1); opacity: 1; } }`}</style>
+          {/* Suggestions */}
+          <div className="rise-2" style={{ marginTop: 26 }}>
+            <div className="eyebrow no-rule" style={{ marginBottom: 12, justifyContent: "center", width: "100%" }}>Try asking</div>
+            <div className="row wrap center" style={{ gap: 8 }}>
+              {["Latest in AI chips", "This week in crypto", "New research on longevity", "Premier League transfer news", "Fed rate outlook"].map(s => (
+                <button key={s} onClick={() => setTopic(s)} className="chip chip-hover" style={{ cursor: "pointer" }}>{s}</button>
+              ))}
+            </div>
+          </div>
+        </main>
+      </div>
+
+      <style>{`
+        @media (max-width: 520px) {
+          .ask-compose { flex-direction: column; }
+          .ask-compose .btn { width: 100%; }
+        }
+      `}</style>
     </div>
   );
 }

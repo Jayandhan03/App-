@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -85,12 +84,12 @@ export default function Delivery() {
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <AppNav />
-      <main className="container" style={{ padding: "40px 24px 80px", maxWidth: 1000 }}>
+      <main className="container" style={{ padding: "40px 24px 88px", maxWidth: 1000 }}>
         {/* Header */}
-        <div className="rise" style={{ marginBottom: 32 }}>
+        <div className="rise" style={{ marginBottom: 36 }}>
           <div className="eyebrow" style={{ marginBottom: 14 }}>Delivery channels</div>
           <h1 className="t-h2" style={{ marginBottom: 12, maxWidth: 640 }}>
-            {anyConnected ? "Where your voice notes land." : "Get your voice notes in your chat app."}
+            {anyConnected ? <>Where your voice notes <span className="serif" style={{ fontSize: "1.05em" }}>land.</span></> : <>Get your voice notes <span className="serif" style={{ fontSize: "1.05em" }}>in your chat app.</span></>}
           </h1>
           <p className="t-lead" style={{ maxWidth: 580 }}>
             Your agents deliver voice-note updates to three places — the Leora app, Telegram and WhatsApp.
@@ -102,10 +101,10 @@ export default function Delivery() {
           {/* Left: channels */}
           <div className="col" style={{ gap: 16 }}>
             {/* In-app inbox — always on */}
-            <div className="card" style={{ padding: 22 }}>
-              <div className="row between">
+            <div className="card card-interactive" style={{ padding: 22 }}>
+              <div className="row between wrap" style={{ gap: 10 }}>
                 <div className="row" style={{ gap: 13 }}>
-                  <span className="row center" style={{ width: 44, height: 44, borderRadius: "var(--r-md)", background: "var(--solid)", color: "var(--solid-ink)" }}><AppIcon size={22} /></span>
+                  <span className="row center" style={{ width: 44, height: 44, borderRadius: "var(--r-md)", background: "var(--solid)", color: "var(--solid-ink)", flexShrink: 0 }}><AppIcon size={22} /></span>
                   <div>
                     <div style={{ fontSize: "1rem", fontWeight: 600, letterSpacing: "-0.02em" }}>In the Leora app</div>
                     <div style={{ fontSize: "0.8rem", color: "var(--ink-3)" }}>Your voice-note inbox · web now, mobile soon</div>
@@ -119,10 +118,10 @@ export default function Delivery() {
             </div>
 
             {/* Telegram */}
-            <div className="card" style={{ overflow: "hidden" }}>
-              <div className="row between" style={{ padding: 22, borderBottom: "1px solid var(--line)" }}>
+            <div className={`card ${tgConnected ? "card-featured" : ""}`} style={{ overflow: "hidden" }}>
+              <div className="row between wrap" style={{ padding: 22, borderBottom: "1px solid var(--line)", gap: 10 }}>
                 <div className="row" style={{ gap: 13 }}>
-                  <span className="row center" style={{ width: 44, height: 44, borderRadius: "var(--r-md)", background: "#229ED9" }}><TgIcon size={22} /></span>
+                  <span className="row center" style={{ width: 44, height: 44, borderRadius: "var(--r-md)", background: "#229ED9", flexShrink: 0, boxShadow: "0 6px 18px rgba(34,158,217,0.3)" }}><TgIcon size={22} /></span>
                   <div>
                     <div style={{ fontSize: "1rem", fontWeight: 600, letterSpacing: "-0.02em" }}>Telegram</div>
                     <div style={{ fontSize: "0.8rem", color: "var(--ink-3)" }}>Voice-note updates in your chat</div>
@@ -137,7 +136,7 @@ export default function Delivery() {
               <div style={{ padding: 22 }}>
                 {tgConnected ? (
                   <>
-                    <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, background: "var(--accent-soft)", borderColor: "var(--accent-line)", boxShadow: "none" }}>
+                    <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, background: "var(--accent-soft)", borderColor: "var(--accent-line)", boxShadow: "none", animation: "riseSm 0.3s var(--ease) both" }}>
                       <span className="row center" style={{ width: 38, height: 38, borderRadius: "var(--r-sm)", background: "#229ED9", flexShrink: 0 }}><TgIcon size={19} /></span>
                       <div>
                         <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--accent-ink)" }}>Leora bot connected</div>
@@ -157,7 +156,7 @@ export default function Delivery() {
                       {STEPS.map((s, i) => (
                         <div key={i} className="row" style={{ gap: 13, alignItems: "flex-start" }}>
                           <div className="col center" style={{ alignItems: "center" }}>
-                            <span className="row center" style={{ width: 26, height: 26, borderRadius: "50%", fontSize: "0.75rem", fontWeight: 700, background: tgConnecting && i === 0 ? "var(--accent)" : "var(--surface-2)", color: tgConnecting && i === 0 ? "#fff" : "var(--ink-3)", border: "1px solid var(--line-2)", flexShrink: 0 }}>{i + 1}</span>
+                            <span className="row center" style={{ width: 26, height: 26, borderRadius: "50%", fontSize: "0.75rem", fontWeight: 700, background: tgConnecting && i === 0 ? "var(--accent)" : "var(--surface-2)", color: tgConnecting && i === 0 ? "#fff" : "var(--ink-3)", border: "1px solid var(--line-2)", flexShrink: 0, transition: "background 0.3s var(--ease), color 0.3s var(--ease)" }}>{i + 1}</span>
                             {i < STEPS.length - 1 && <span style={{ width: 1.5, height: 22, background: "var(--line)" }} />}
                           </div>
                           <div style={{ paddingBottom: 12 }}>
@@ -175,21 +174,21 @@ export default function Delivery() {
                       </div>
                     ) : (
                       <button onClick={handleConnect} className="btn btn-lg" style={{ width: "100%", background: "#229ED9", color: "#fff", boxShadow: "0 6px 20px rgba(34,158,217,0.25)" }}>
-                        <TgIcon size={18} /> Open Telegram & connect
+                        <TgIcon size={18} /> Open Telegram &amp; connect
                       </button>
                     )}
                   </>
                 )}
-                {tgError && <div className="card" style={{ marginTop: 12, padding: "10px 14px", background: "var(--danger-soft)", borderColor: "var(--danger)", color: "var(--danger)", fontSize: "0.82rem", boxShadow: "none" }}>{tgError}</div>}
+                {tgError && <div className="card" style={{ marginTop: 12, padding: "10px 14px", background: "var(--danger-soft)", borderColor: "var(--danger)", color: "var(--danger)", fontSize: "0.82rem", boxShadow: "none", animation: "riseSm 0.25s var(--ease) both" }}>{tgError}</div>}
                 <p className="t-muted" style={{ fontSize: "0.74rem", marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--line)", textAlign: "center" }}>We only receive your chat ID — never your messages or contacts.</p>
               </div>
             </div>
 
             {/* WhatsApp — coming soon */}
             <div className="card" style={{ padding: 22 }}>
-              <div className="row between">
+              <div className="row between wrap" style={{ gap: 10 }}>
                 <div className="row" style={{ gap: 13 }}>
-                  <span className="row center" style={{ width: 44, height: 44, borderRadius: "var(--r-md)", background: "#25D366", opacity: 0.9 }}><WaIcon size={22} /></span>
+                  <span className="row center" style={{ width: 44, height: 44, borderRadius: "var(--r-md)", background: "#25D366", opacity: 0.9, flexShrink: 0 }}><WaIcon size={22} /></span>
                   <div>
                     <div style={{ fontSize: "1rem", fontWeight: 600, letterSpacing: "-0.02em" }}>WhatsApp</div>
                     <div style={{ fontSize: "0.8rem", color: "var(--ink-3)" }}>Voice notes straight to WhatsApp</div>
@@ -208,10 +207,10 @@ export default function Delivery() {
 
           {/* Right: preview + features */}
           <div className="col" style={{ gap: 16 }}>
-            <div className="card" style={{ overflow: "hidden", padding: 0 }}>
+            <div className="card" style={{ overflow: "hidden", padding: 0, boxShadow: "var(--shadow-lg)", borderRadius: "var(--r-xl)" }}>
               <div className="row" style={{ gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--line)", background: "var(--surface-2)" }}>
                 <span className="row center" style={{ width: 34, height: 34, borderRadius: "50%", background: "#229ED9", flexShrink: 0 }}><TgIcon size={17} /></span>
-                <div><div style={{ fontSize: "0.85rem", fontWeight: 600 }}>Leora</div><div style={{ fontSize: "0.72rem", color: "var(--accent-ink)" }}>bot · online</div></div>
+                <div><div style={{ fontSize: "0.85rem", fontWeight: 600 }}>Leora</div><div className="row" style={{ gap: 6, fontSize: "0.72rem", color: "var(--accent-ink)" }}><span className="dot" style={{ width: 5, height: 5 }} /> bot · online</div></div>
               </div>
               <div style={{ padding: "18px 16px", display: "flex", flexDirection: "column", gap: 10, minHeight: 200 }}>
                 <div style={{ alignSelf: "flex-start", maxWidth: "88%", background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "14px 14px 14px 4px", padding: "11px 13px" }}>
@@ -219,7 +218,9 @@ export default function Delivery() {
                   <div style={{ fontSize: "0.68rem", color: "var(--ink-4)", textAlign: "right", marginTop: 4 }}>8:00 AM</div>
                 </div>
                 <div style={{ alignSelf: "flex-start", maxWidth: "88%", background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 14, padding: "11px 13px" }} className="row">
-                  <span className="row center" style={{ width: 34, height: 34, borderRadius: "50%", background: "var(--accent)", color: "#fff", flexShrink: 0, marginRight: 11 }}>▶</span>
+                  <span className="row center" style={{ width: 34, height: 34, borderRadius: "50%", background: "var(--accent)", color: "#fff", flexShrink: 0, marginRight: 11, boxShadow: "0 4px 14px var(--accent-glow)" }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                  </span>
                   <div className="row" style={{ gap: 2, height: 22, flex: 1 }}>
                     {Array.from({ length: 22 }).map((_, i) => <span key={i} style={{ width: 2.5, borderRadius: 2, background: i < 8 ? "var(--accent)" : "var(--line-3)", height: `${[6,12,18,9,15,20,11,7,16,13,19,8,14,10,17,6,12,18,9,15,11,7][i]}px` }} />)}
                   </div>
@@ -229,7 +230,7 @@ export default function Delivery() {
             </div>
             <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {[["On your schedule", "Daily, hourly or custom."], ["Instant delivery", "Tap and listen anywhere."], ["Any language", "In your voice & tone."], ["Quiet hours", "No pings while you sleep."]].map(([t, d]) => (
-                <div key={t} className="card" style={{ padding: 15 }}>
+                <div key={t} className="card card-interactive" style={{ padding: 16 }}>
                   <div style={{ fontSize: "0.82rem", fontWeight: 600 }}>{t}</div>
                   <div style={{ fontSize: "0.75rem", color: "var(--ink-3)", marginTop: 3, lineHeight: 1.45 }}>{d}</div>
                 </div>
