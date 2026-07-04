@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -27,7 +28,7 @@ export default function SignIn() {
       {/* ── Left: sign in ── */}
       <div style={{ position: "relative", display: "flex", flexDirection: "column" }}>
         <div className="row between" style={{ height: 64, padding: "0 28px" }}>
-          <a href="/" className="row" style={{ gap: 10 }}><Logo /><span style={{ fontWeight: 600, letterSpacing: "-0.02em" }}>Leora</span></a>
+          <Link href="/" className="row" style={{ gap: 10 }}><Logo /><span style={{ fontWeight: 600, letterSpacing: "-0.02em" }}>Leora</span></Link>
           <ThemeToggle />
         </div>
 
@@ -70,7 +71,7 @@ export default function SignIn() {
               By continuing you agree to our <a href="#" style={{ color: "var(--ink-2)", textDecoration: "underline" }}>Terms</a> and <a href="#" style={{ color: "var(--ink-2)", textDecoration: "underline" }}>Privacy Policy</a>.
             </p>
             <div style={{ textAlign: "center", marginTop: 12 }}>
-              <a href="/" className="nav-link" style={{ fontSize: "0.82rem" }}>← Back to home</a>
+              <Link href="/" className="nav-link" style={{ fontSize: "0.82rem" }}>← Back to home</Link>
             </div>
           </div>
         </div>

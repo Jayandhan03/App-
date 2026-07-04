@@ -199,7 +199,7 @@ export default function Landing() {
       {/* ══ NAV ══ */}
       <header className="glass" style={{ position: "sticky", top: 0, zIndex: 50, borderBottom: "1px solid var(--line)" }}>
         <div className="container row between" style={{ height: "var(--nav-h)" }}>
-          <a href="#top" className="row" style={{ gap: 10 }}><Logo /><span style={{ fontWeight: 600, fontSize: "0.98rem", letterSpacing: "-0.02em" }}>Leora</span></a>
+          <Link href="/" className="row" style={{ gap: 10 }}><Logo /><span style={{ fontWeight: 600, fontSize: "0.98rem", letterSpacing: "-0.02em" }}>Leora</span></Link>
           <nav className="home-nav-links row" style={{ gap: 6, position: "absolute", left: "50%", transform: "translateX(-50%)" }}>
             {NAV_LINKS.map(([h, l]) => (
               <a key={h} href={h} className="nav-link" style={{ padding: "7px 12px", borderRadius: "var(--r-full)" }}>{l}</a>
@@ -505,7 +505,7 @@ export default function Landing() {
         <div className="container" style={{ padding: "52px 24px 32px" }}>
           <div className="row between wrap" style={{ gap: 32, alignItems: "flex-start" }}>
             <div style={{ maxWidth: 320 }}>
-              <div className="row" style={{ gap: 10, marginBottom: 14 }}><Logo /><span style={{ fontWeight: 600, letterSpacing: "-0.02em" }}>Leora</span></div>
+              <Link href="/" className="row" style={{ gap: 10, marginBottom: 14 }}><Logo /><span style={{ fontWeight: 600, letterSpacing: "-0.02em" }}>Leora</span></Link>
               <p style={{ fontSize: "0.85rem", color: "var(--ink-3)", lineHeight: 1.65 }}>Deploy AI agents that monitor what matters and brief you by voice — in your app, Telegram or WhatsApp. Made for busy minds.</p>
             </div>
             <div className="row wrap" style={{ gap: 56, alignItems: "flex-start" }}>

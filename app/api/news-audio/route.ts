@@ -53,8 +53,8 @@ export async function POST(req: Request) {
             topic:          body.topic,
             limit:          body.limit          ?? 5,
             time_published: body.time_published ?? "anytime",
-            voice_id:       body.voice_id       ?? "en",
-            model_id:       body.model_id       ?? "",
+            language:       body.language       ?? "English",
+            tone:           body.tone           ?? "Analytical",
         };
 
         if (!payload.topic?.trim()) {

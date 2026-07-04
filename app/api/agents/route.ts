@@ -1,22 +1,17 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-
-/**
- * GET /api/agents — the deployed agents shown on the dashboard.
- *
- * Tries the FastAPI backend first (GET /api/v1/agents). If the backend is
- * unreachable or hasn't been wired up yet, it falls back to a local set of
- * dummy agents so the dashboard always renders. Swap `FALLBACK_AGENTS` /
- * remove the try-catch once real per-user persistence is live.
- */
-
-const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8000";
+import { connectToDatabase } from "@/lib/mongodb";
+import AgentModel, { IAgent } from "@/models/Agent";
+import TelegramLink from "@/models/TelegramLink";
+import { LANGUAGE_CODES } from "@/lib/agentConstants";
+import { computeNextRunAt } from "@/lib/schedule";
 
 export type AgentPersonality = {
   voice: string;
   voiceId?: string;
   language: string;
+  languageCode?: string;
   toneSummary?: string;
 };
 
@@ -30,6 +25,7 @@ export type AgentSchedule = {
   frequency: string;
   intervalMinutes: number;
   times: string[];
+  weekday: number | null;
   timezone: string;
   enabled: boolean;
   nextRunAt?: string | null;
@@ -51,194 +47,159 @@ export type Agent = {
   description: string;
   status: "active" | "paused";
   keywords: string[];
+  region: string;
+  /** The agent's locked-in research directive, derived from the onboarding chat with Leora. */
+  corePrompt: string;
+  /** Plain-English summary of corePrompt, shown back to the user as "what this agent will deliver". */
+  onboardingSummary: string;
   personality: AgentPersonality;
   platforms: AgentPlatform[];
   schedule: AgentSchedule;
   stats: AgentStats;
 };
 
-const FALLBACK_AGENTS: Agent[] = [
-  {
-    id: "finance-markets",
-    name: "Finance Agent",
-    icon: "💹",
-    accent: "#34d399",
-    niche: "Finance & Markets",
-    description: "Stocks, crypto, earnings and macro moves — the moment they break.",
-    status: "active",
-    keywords: ["S&P 500", "Fed rates", "earnings", "Bitcoin", "macro"],
-    personality: {
-      voice: "Professional",
-      language: "English",
-      toneSummary: "Crisp, analyst-style delivery with the numbers up front.",
-    },
-    platforms: [
-      { platform: "telegram", connected: true, handle: "@jayandhan" },
-      { platform: "whatsapp", connected: false, handle: null },
-    ],
-    schedule: {
-      frequency: "Twice daily",
-      intervalMinutes: 720,
-      times: ["08:00", "18:00"],
-      timezone: "Asia/Kolkata",
-      enabled: true,
-      nextRunAt: "2026-07-01T18:00:00+05:30",
-      lastSentAt: "2026-07-01T08:00:00+05:30",
-    },
-    stats: { briefingsSent: 128, sourcesTracked: 42, lastBriefing: "4h ago" },
-  },
-  {
-    id: "jobs-careers",
-    name: "Careers Agent",
-    icon: "💼",
-    accent: "#4d7fff",
-    niche: "Jobs & Careers",
-    description: "Fresh roles, hiring trends and openings matched to your profile.",
-    status: "active",
-    keywords: ["AI engineer", "remote", "startups hiring", "referrals"],
-    personality: {
-      voice: "Casual",
-      language: "English",
-      toneSummary: "Friendly and encouraging, like a well-connected recruiter friend.",
-    },
-    platforms: [
-      { platform: "telegram", connected: true, handle: "@jayandhan" },
-      { platform: "whatsapp", connected: true, handle: "+91 •••• ••1234" },
-    ],
-    schedule: {
-      frequency: "Daily",
-      intervalMinutes: 1440,
-      times: ["09:00"],
-      timezone: "Asia/Kolkata",
-      enabled: true,
-      nextRunAt: "2026-07-02T09:00:00+05:30",
-      lastSentAt: "2026-07-01T09:00:00+05:30",
-    },
-    stats: { briefingsSent: 54, sourcesTracked: 18, lastBriefing: "7h ago" },
-  },
-  {
-    id: "law-policy",
-    name: "Policy Agent",
-    icon: "⚖️",
-    accent: "#8b5cf6",
-    niche: "Law & Policy",
-    description: "Regulations, rulings and legal shifts that actually affect you.",
-    status: "paused",
-    keywords: ["data privacy", "GDPR", "AI regulation", "tax law"],
-    personality: {
-      voice: "Calm",
-      language: "English",
-      toneSummary: "Measured and precise — no hype, just what changed and why it matters.",
-    },
-    platforms: [
-      { platform: "telegram", connected: true, handle: "@jayandhan" },
-      { platform: "whatsapp", connected: false, handle: null },
-    ],
-    schedule: {
-      frequency: "Weekly",
-      intervalMinutes: 10080,
-      times: ["Mon 07:30"],
-      timezone: "Asia/Kolkata",
-      enabled: false,
-      nextRunAt: null,
-      lastSentAt: "2026-06-23T07:30:00+05:30",
-    },
-    stats: { briefingsSent: 9, sourcesTracked: 11, lastBriefing: "8d ago" },
-  },
-  {
-    id: "tech-science",
-    name: "Tech Agent",
-    icon: "🧬",
-    accent: "#f472b6",
-    niche: "Tech & Science",
-    description: "Product launches, research breakthroughs and the next big thing.",
-    status: "active",
-    keywords: ["LLMs", "chip news", "space", "biotech", "open source"],
-    personality: {
-      voice: "Energetic",
-      language: "English",
-      toneSummary: "Upbeat and curious, great for keeping up with fast-moving tech.",
-    },
-    platforms: [
-      { platform: "telegram", connected: true, handle: "@jayandhan" },
-      { platform: "whatsapp", connected: false, handle: null },
-    ],
-    schedule: {
-      frequency: "Real-time",
-      intervalMinutes: 60,
-      times: ["As it happens"],
-      timezone: "Asia/Kolkata",
-      enabled: true,
-      nextRunAt: "2026-07-01T15:00:00+05:30",
-      lastSentAt: "2026-07-01T13:00:00+05:30",
-    },
-    stats: { briefingsSent: 340, sourcesTracked: 63, lastBriefing: "1h ago" },
-  },
-];
-
-/** Normalise the backend's snake_case shape into the camelCase the UI expects. */
-function fromBackend(raw: any): Agent {
+/** Map a stored Mongo agent document to the shape the dashboard renders. */
+export function toClientShape(doc: any): Agent {
   return {
-    id: raw.id,
-    name: raw.name,
-    icon: raw.icon ?? "🛰️",
-    accent: raw.accent ?? "#4d7fff",
-    niche: raw.niche,
-    description: raw.description ?? "",
-    status: raw.status ?? "active",
-    keywords: raw.keywords ?? [],
+    id: String(doc._id),
+    name: doc.name,
+    icon: doc.icon ?? "🛰️",
+    accent: doc.accent ?? "#4d7fff",
+    niche: doc.niche,
+    description: doc.description ?? "",
+    status: doc.status ?? "active",
+    keywords: doc.topics?.length ? doc.topics : doc.keywords ?? [],
+    region: doc.region ?? "Global",
+    corePrompt: doc.corePrompt ?? "",
+    onboardingSummary: doc.onboardingSummary ?? "",
     personality: {
-      voice: raw.personality?.voice ?? "Professional",
-      voiceId: raw.personality?.voice_id,
-      language: raw.personality?.language ?? "English",
-      toneSummary: raw.personality?.tone_summary ?? "",
+      voice: doc.personality?.voice ?? "Analytical",
+      language: doc.personality?.language ?? "English",
+      languageCode: doc.personality?.languageCode ?? "en",
+      toneSummary: doc.personality?.toneSummary ?? "",
     },
-    platforms: (raw.platforms ?? []).map((p: any) => ({
+    platforms: (doc.platforms ?? []).map((p: any) => ({
       platform: p.platform,
       connected: !!p.connected,
       handle: p.handle ?? null,
     })),
     schedule: {
-      frequency: raw.schedule?.frequency ?? "daily",
-      intervalMinutes: raw.schedule?.interval_minutes ?? 1440,
-      times: raw.schedule?.times ?? [],
-      timezone: raw.schedule?.timezone ?? "UTC",
-      enabled: raw.schedule?.enabled ?? true,
-      nextRunAt: raw.schedule?.next_run_at ?? null,
-      lastSentAt: raw.schedule?.last_sent_at ?? null,
+      frequency: doc.schedule?.frequency ?? "Daily brief",
+      intervalMinutes: doc.schedule?.intervalMinutes ?? 1440,
+      times: doc.schedule?.times ?? [],
+      weekday: doc.schedule?.weekday ?? null,
+      timezone: doc.schedule?.timezone ?? "UTC",
+      enabled: doc.schedule?.enabled ?? true,
+      nextRunAt: doc.schedule?.nextRunAt ?? null,
+      lastSentAt: doc.schedule?.lastSentAt ?? null,
     },
     stats: {
-      briefingsSent: raw.stats?.briefings_sent ?? 0,
-      sourcesTracked: raw.stats?.sources_tracked ?? 0,
-      lastBriefing: raw.stats?.last_briefing ?? null,
+      briefingsSent: doc.stats?.briefingsSent ?? 0,
+      sourcesTracked: doc.stats?.sourcesTracked ?? 0,
+      lastBriefing: doc.schedule?.lastSentAt ?? null,
     },
   };
 }
 
+// GET — the current user's real deployed agents. Empty array for new users.
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
-    return NextResponse.json({ success: false, error: "Not authenticated" }, { status: 401 });
-  }
-
-  // Try the real backend; fall back to dummy data so the dashboard always works.
   try {
-    const url = `${BACKEND}/api/v1/agents?email=${encodeURIComponent(session.user.email)}`;
-    const res = await fetch(url, {
-      headers: { "Content-Type": "application/json" },
-      // Never cache agent config — always reflect the latest.
-      cache: "no-store",
-      signal: AbortSignal.timeout(5000),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.success && Array.isArray(data.agents) && data.agents.length) {
-        return NextResponse.json({ success: true, agents: data.agents.map(fromBackend), source: "backend" });
-      }
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ success: false, error: "Not authenticated" }, { status: 401 });
     }
-  } catch {
-    // Backend not ready — fall through to dummy data.
-  }
 
-  return NextResponse.json({ success: true, agents: FALLBACK_AGENTS, source: "placeholder" });
+    await connectToDatabase();
+    const docs = await AgentModel.find({ email: session.user.email }).sort({ createdAt: -1 }).lean();
+    return NextResponse.json({ success: true, agents: docs.map(toClientShape) });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unexpected error";
+    console.error("[agents GET]", message);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
+}
+
+// POST — deploy a new agent from the Create-agent flow.
+export async function POST(req: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ success: false, error: "Not authenticated" }, { status: 401 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const topic = typeof body.topic === "string" ? body.topic.trim() : "";
+    if (!name || !topic) {
+      return NextResponse.json({ success: false, error: "Agent name and topic are required." }, { status: 400 });
+    }
+
+    await connectToDatabase();
+
+    const language = typeof body.language === "string" && body.language ? body.language : "English";
+    const languageCode = LANGUAGE_CODES[language] ?? "en";
+    const voice = typeof body.voice === "string" && body.voice ? body.voice : "Analytical";
+
+    const intervalMinutes = Number.isFinite(body.intervalMinutes) ? Math.max(15, Math.round(body.intervalMinutes)) : 1440;
+    const frequency = typeof body.frequency === "string" && body.frequency ? body.frequency : "Daily brief";
+    const times = Array.isArray(body.times) ? body.times.filter((t: unknown) => typeof t === "string" && /^\d{2}:\d{2}$/.test(t)) : ["09:00"];
+    const weekday = Number.isInteger(body.weekday) && body.weekday >= 0 && body.weekday <= 6 ? body.weekday : null;
+    const timezone = typeof body.timezone === "string" && body.timezone ? body.timezone : "UTC";
+    const scheduleEnabled = body.scheduleEnabled !== false;
+
+    // Never trust client-supplied connection state — derive Telegram delivery from the real link.
+    const tgLink = await TelegramLink.findOne({ email: session.user.email }).lean();
+    const wantsTelegram = body.telegramEnabled !== false;
+    const platforms = [
+      {
+        platform: "telegram" as const,
+        connected: !!tgLink && wantsTelegram,
+        handle: tgLink?.username ? `@${tgLink.username}` : null,
+      },
+      { platform: "whatsapp" as const, connected: false, handle: null },
+    ];
+
+    // A delivery channel is mandatory — Telegram is the only one actually wired
+    // up today (WhatsApp/in-app are coming soon), so this is the real gate.
+    if (!platforms.some(p => p.connected)) {
+      return NextResponse.json({ success: false, error: "Select a delivery channel to deploy this agent." }, { status: 422 });
+    }
+
+    const onboardingSummary = typeof body.onboardingSummary === "string" ? body.onboardingSummary.trim() : "";
+    const corePrompt = typeof body.corePrompt === "string" ? body.corePrompt.trim() : "";
+    const keywords = Array.isArray(body.keywords) ? body.keywords.filter((k: unknown) => typeof k === "string" && k.trim()) : [];
+
+    const doc = await AgentModel.create({
+      email: session.user.email,
+      name,
+      niche: topic,
+      description: typeof body.description === "string" && body.description ? body.description : onboardingSummary,
+      topics: [topic],
+      keywords,
+      region: typeof body.region === "string" && body.region ? body.region : "Global",
+      corePrompt,
+      onboardingSummary,
+      articleLimit: Number.isFinite(body.articleLimit) ? Math.min(20, Math.max(1, Math.round(body.articleLimit))) : 5,
+      personality: { voice, language, languageCode, toneSummary: "" },
+      platforms,
+      schedule: {
+        frequency,
+        intervalMinutes,
+        times,
+        weekday,
+        timezone,
+        enabled: scheduleEnabled,
+        nextRunAt: scheduleEnabled ? computeNextRunAt({ frequency, intervalMinutes, times, weekday, timezone }) : null,
+        lastSentAt: null,
+      },
+      stats: { briefingsSent: 0, sourcesTracked: 0 },
+    } satisfies Partial<IAgent>);
+
+    return NextResponse.json({ success: true, agent: toClientShape(doc) });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unexpected error";
+    console.error("[agents POST]", message);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
 }

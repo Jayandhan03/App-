@@ -4,8 +4,12 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useCallback } from "react";
-import type { Agent, AgentPlatform } from "@/app/api/agents/route";
+import type { Agent } from "@/app/api/agents/route";
 import AppNav from "@/components/AppNav";
+import SavedTopicPicker, { SavedTopicShape } from "@/components/SavedTopicPicker";
+import TimePicker from "@/components/TimePicker";
+import { VOICES, LANGUAGES, CADENCES } from "@/lib/agentConstants";
+import { WEEKDAYS, describeSchedule, describeNextRun, timezoneLabel, computeNextRunAt, detectTimezone, listTimezones } from "@/lib/schedule";
 
 /* ── Icons ── */
 const I = {
@@ -24,16 +28,6 @@ const I = {
   source: (p = {}) => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...p}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" /></svg>,
   mic: (p = {}) => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...p}><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10a7 7 0 0 0 14 0M12 17v5" /></svg>,
 };
-
-const VOICES = ["Analytical", "Conversational", "Concise", "Editorial", "Neutral"];
-const LANGUAGES = ["English", "Español", "हिन्दी", "Français", "Deutsch", "العربية", "中文", "Português"];
-const CADENCES: { label: string; times: string[]; intervalMinutes: number }[] = [
-  { label: "Real-time", times: ["As it happens"], intervalMinutes: 60 },
-  { label: "Hourly", times: ["Every hour"], intervalMinutes: 60 },
-  { label: "Twice daily", times: ["08:00", "18:00"], intervalMinutes: 720 },
-  { label: "Daily brief", times: ["08:00"], intervalMinutes: 1440 },
-  { label: "Weekly digest", times: ["Mon 08:00"], intervalMinutes: 10080 },
-];
 
 type Field = "status" | "voice" | "language" | "cadence" | "channels";
 type MenuState = { id: string; field: Field; x: number; y: number } | null;
@@ -75,6 +69,19 @@ function formatNext(iso?: string | null): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+function formatElapsed(iso?: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  const mins = Math.max(0, Math.round((Date.now() - d.getTime()) / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  return `${days}d ago`;
+}
+
 function greeting(): string {
   const h = new Date().getHours();
   if (h < 5) return "Working late";
@@ -89,8 +96,15 @@ export default function Dashboard() {
   const [agents, setAgents] = useState<Agent[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuState>(null);
-  const [ask, setAsk] = useState("");
   const [workIdx, setWorkIdx] = useState(0);
+  const [editing, setEditing] = useState<Agent | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", niche: "", corePrompt: "" });
+  const [savedTopics, setSavedTopics] = useState<SavedTopicShape[] | null>(null);
+  const [topicPickerOpen, setTopicPickerOpen] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [cadenceDraft, setCadenceDraft] = useState<{ frequency: string; times: string[]; weekday: number | null; timezone: string } | null>(null);
+  const [tzPickerOpen, setTzPickerOpen] = useState(false);
+  const zoneOptions = useMemo(listTimezones, []);
 
   useEffect(() => { if (status === "unauthenticated") router.replace("/signin"); }, [status, router]);
 
@@ -117,17 +131,37 @@ export default function Dashboard() {
     return () => { window.removeEventListener("resize", close); window.removeEventListener("scroll", close, true); document.removeEventListener("keydown", onKey); };
   }, [menu]);
 
-  const patch = useCallback((id: string, up: (s: Agent) => Agent) => setAgents(p => p?.map(s => s.id === id ? up(s) : s) ?? p), []);
+  const patchAgent = useCallback(async (id: string, body: Record<string, unknown>) => {
+    try {
+      const res = await fetch(`/api/agents/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.success && data.agent) setAgents(p => p?.map(s => (s.id === id ? data.agent : s)) ?? p);
+    } catch { /* keep prior state on failure */ }
+  }, []);
+
+  const removeAgent = useCallback(async (id: string, name: string) => {
+    if (!confirm(`Remove "${name}"?`)) return;
+    try {
+      const res = await fetch(`/api/agents/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (data.success) setAgents(p => p?.filter(x => x.id !== id) ?? p);
+    } catch { /* leave agent in place on failure */ }
+  }, []);
+
   const openMenu = (e: React.MouseEvent, id: string, field: Field) => {
     e.stopPropagation();
     if (menu && menu.id === id && menu.field === field) return setMenu(null);
+    if (field === "cadence") {
+      const a = agents?.find(s => s.id === id);
+      setCadenceDraft(a ? { frequency: a.schedule.frequency, times: a.schedule.times, weekday: a.schedule.weekday, timezone: a.schedule.timezone || detectTimezone() } : null);
+      setTzPickerOpen(false);
+    }
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setMenu({ id, field, x: Math.min(r.left, window.innerWidth - 250), y: r.bottom + 6 });
-  };
-  const togglePlatform = (list: AgentPlatform[], platform: "telegram" | "whatsapp"): AgentPlatform[] => {
-    const ex = list.find(p => p.platform === platform);
-    if (ex) return list.map(p => p.platform === platform ? { ...p, connected: !p.connected } : p);
-    return [...list, { platform, connected: true, handle: null }];
   };
 
   const summary = useMemo(() => {
@@ -145,12 +179,12 @@ export default function Dashboard() {
     return <div className="row center" style={{ minHeight: "100vh" }}><span className="spinner" /></div>;
   }
 
-  /* Synthesized morning-brief items (placeholder intelligence) */
-  const brief = [
-    { t: "Markets open cautious after overnight tech selloff", s: "Finance", meta: "4 sources agree", c: "var(--accent)" },
-    { t: "A new open-weight model is topping evaluations", s: "AI & Tech", meta: "Trending · 3 places", c: "var(--info)" },
-    { t: "Policy change may affect your product category", s: "Policy", meta: "Flagged important", c: "var(--warn)" },
-  ];
+  /* Real recent deliveries — agents that have actually sent at least one brief. */
+  const recentBriefs = (agents ?? [])
+    .filter(s => !!s.stats.lastBriefing)
+    .sort((a, b) => new Date(b.stats.lastBriefing!).getTime() - new Date(a.stats.lastBriefing!).getTime())
+    .slice(0, 3)
+    .map(s => ({ t: `${s.name} sent a new briefing`, s: s.niche, meta: formatElapsed(s.stats.lastBriefing), c: s.accent }));
 
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
@@ -173,19 +207,6 @@ export default function Dashboard() {
           <Link href="#deploy" className="btn btn-primary">{I.plus()} Deploy agent</Link>
         </div>
 
-        {/* ── Ask bar ── */}
-        <form
-          onSubmit={(e) => { e.preventDefault(); if (ask.trim()) router.push(`/test-agent?q=${encodeURIComponent(ask)}`); }}
-          className="card rise-1 ask-bar"
-          style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 6px 6px 18px", marginBottom: 28, borderRadius: "var(--r-full)" }}
-        >
-          <span style={{ color: "var(--ink-3)" }}>{I.ask()}</span>
-          <input value={ask} onChange={e => setAsk(e.target.value)} placeholder="Ask your agents anything — “what changed in AI chips this week?”"
-            style={{ flex: 1, height: 42, border: "none", background: "none", outline: "none", color: "var(--ink)", fontSize: "0.95rem", minWidth: 0 }} />
-          <span className="kbd nav-links-desktop" style={{ marginRight: 4 }}>↵</span>
-          <button type="submit" className="btn btn-primary btn-sm" style={{ borderRadius: "var(--r-full)", height: 38, padding: "0 18px" }}>Ask</button>
-        </form>
-
         {/* ── Stats ── */}
         <div className="grid rise-1" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14, marginBottom: 32 }}>
           <StatTile value={summary.total} label="Agents deployed" icon={I.agents()} />
@@ -205,7 +226,7 @@ export default function Dashboard() {
               </div>
               <span className="badge badge-accent"><span className="dot" /> Fresh</span>
             </div>
-            {summary.active > 0 ? brief.map((b, k) => (
+            {recentBriefs.length > 0 ? recentBriefs.map((b, k) => (
               <div key={k} className="brief-row row" style={{ gap: 14, padding: "16px 22px", borderTop: k ? "1px solid var(--line)" : "none", cursor: "pointer" }}>
                 <span style={{ width: 3, height: 40, borderRadius: 3, background: b.c, flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -328,13 +349,24 @@ export default function Dashboard() {
                         </td>
                         <td>
                           <div style={{ fontSize: "0.82rem", fontWeight: 550 }}>{s.stats.briefingsSent} briefs</div>
-                          <div style={{ fontSize: "0.7rem", color: "var(--ink-4)" }}>{s.stats.sourcesTracked} sources · {s.stats.lastBriefing ?? "—"}</div>
+                          <div style={{ fontSize: "0.7rem", color: "var(--ink-4)" }}>{s.stats.sourcesTracked} sources · {formatElapsed(s.stats.lastBriefing)}</div>
                         </td>
                         <td>
                           <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
-                            <button className="icon-btn" title={on ? "Pause" : "Resume"} onClick={() => patch(s.id, sc => ({ ...sc, status: sc.status === "active" ? "paused" : "active" }))}>{on ? I.pause() : I.play()}</button>
-                            <button className="icon-btn" title="Configure" onClick={() => alert(`A full editor for “${s.name}” arrives with the backend. For now, edit any cell inline.`)}>{I.gear()}</button>
-                            <button className="icon-btn danger" title="Remove" onClick={() => { if (confirm(`Remove “${s.name}”? (local only)`)) setAgents(p => p?.filter(x => x.id !== s.id) ?? p); }}>{I.trash()}</button>
+                            <button className="icon-btn" title={on ? "Pause" : "Resume"} onClick={() => patchAgent(s.id, { status: s.status === "active" ? "paused" : "active" })}>{on ? I.pause() : I.play()}</button>
+                            <button
+                              className="icon-btn"
+                              title="Configure"
+                              onClick={() => {
+                                setEditing(s);
+                                setEditForm({ name: s.name, niche: s.niche, corePrompt: s.corePrompt ?? "" });
+                                setTopicPickerOpen(false);
+                                if (savedTopics === null) {
+                                  fetch("/api/saved-topics").then(r => r.json()).then(d => { if (d.success) setSavedTopics(d.topics); }).catch(() => {});
+                                }
+                              }}
+                            >{I.gear()}</button>
+                            <button className="icon-btn danger" title="Remove" onClick={() => removeAgent(s.id, s.name)}>{I.trash()}</button>
                           </div>
                         </td>
                       </tr>
@@ -346,41 +378,117 @@ export default function Dashboard() {
           </div>
         )}
 
-        <p className="t-muted" style={{ fontSize: "0.78rem", marginTop: 14 }}>Placeholder intelligence — edits are local until backend persistence is connected.</p>
       </main>
 
       {/* ── Popover ── */}
       {menu && activeAgent && (
-        <div onClick={e => e.stopPropagation()} className="card popover" style={{ left: menu.x, top: menu.y, minWidth: menu.field === "channels" ? 260 : 200 }}>
+        <div onClick={e => e.stopPropagation()} className="card popover" style={{ left: menu.x, top: menu.y, minWidth: menu.field === "channels" ? 260 : menu.field === "cadence" ? 300 : 200 }}>
           {menu.field === "status" && (["active", "paused"] as const).map(v => (
-            <button key={v} className="pop-item" data-on={activeAgent.status === v} onClick={() => { patch(menu.id, s => ({ ...s, status: v })); setMenu(null); }}>
+            <button key={v} className="pop-item" data-on={activeAgent.status === v} onClick={() => { patchAgent(menu.id, { status: v }); setMenu(null); }}>
               <span className="dot" style={{ background: v === "active" ? "var(--accent)" : "var(--ink-4)" }} />{v === "active" ? "Active — monitoring" : "Paused — stopped"}
             </button>
           ))}
           {menu.field === "voice" && VOICES.map(v => (
-            <button key={v} className="pop-item" data-on={activeAgent.personality.voice === v} onClick={() => { patch(menu.id, s => ({ ...s, personality: { ...s.personality, voice: v } })); setMenu(null); }}>{v}</button>
+            <button key={v} className="pop-item" data-on={activeAgent.personality.voice === v} onClick={() => { patchAgent(menu.id, { voice: v }); setMenu(null); }}>{v}</button>
           ))}
           {menu.field === "language" && <div style={{ maxHeight: 250, overflowY: "auto" }}>{LANGUAGES.map(v => (
-            <button key={v} className="pop-item" data-on={activeAgent.personality.language === v} onClick={() => { patch(menu.id, s => ({ ...s, personality: { ...s.personality, language: v } })); setMenu(null); }}>{v}</button>
+            <button key={v} className="pop-item" data-on={activeAgent.personality.language === v} onClick={() => { patchAgent(menu.id, { language: v }); setMenu(null); }}>{v}</button>
           ))}</div>}
-          {menu.field === "cadence" && CADENCES.map(c => (
-            <button key={c.label} className="pop-item" data-on={activeAgent.schedule.frequency === c.label} onClick={() => { patch(menu.id, s => ({ ...s, schedule: { ...s.schedule, frequency: c.label, times: c.times, intervalMinutes: c.intervalMinutes, enabled: true } })); setMenu(null); }}>
-              <span style={{ flex: 1 }}>{c.label}</span><span style={{ fontSize: "0.72rem", color: "var(--ink-4)" }}>{c.times.join(" · ")}</span>
-            </button>
-          ))}
+          {menu.field === "cadence" && cadenceDraft && (() => {
+            const activeCadence = CADENCES.find(c => c.label === cadenceDraft.frequency) ?? CADENCES[3];
+            return (
+              <div style={{ padding: 2 }}>
+                {CADENCES.map(c => (
+                  <button key={c.label} className="pop-item" data-on={cadenceDraft.frequency === c.label}
+                    onClick={() => setCadenceDraft(draft => draft && { ...draft, frequency: c.label, times: c.defaultTimes, weekday: c.needsWeekday ? (draft.weekday ?? 1) : null })}>
+                    <span style={{ marginRight: 7 }}>{c.icon}</span>{c.label}
+                  </button>
+                ))}
+                {activeCadence.needsWeekday && (
+                  <div className="row wrap" style={{ gap: 4, padding: "8px 10px 0" }}>
+                    {WEEKDAYS.map((d, i) => (
+                      <button key={d} type="button" onClick={() => setCadenceDraft(draft => draft && { ...draft, weekday: i })}
+                        className="chip" data-on={cadenceDraft.weekday === i}
+                        style={{ padding: "4px 9px", fontSize: "0.72rem", cursor: "pointer", background: cadenceDraft.weekday === i ? "var(--accent-soft)" : undefined, borderColor: cadenceDraft.weekday === i ? "var(--accent-line)" : undefined }}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {activeCadence.timeSlots > 0 && (
+                  <div className="col" style={{ gap: 12, padding: "10px 10px 0" }}>
+                    {Array.from({ length: activeCadence.timeSlots }).map((_, i) => (
+                      <div key={i}>
+                        {activeCadence.timeSlots > 1 && (
+                          <div style={{ fontSize: "0.66rem", fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--ink-4)", marginBottom: 6 }}>
+                            {i === 0 ? "First delivery" : "Second delivery"}
+                          </div>
+                        )}
+                        <TimePicker
+                          value={cadenceDraft.times[i] ?? "09:00"}
+                          onChange={v => setCadenceDraft(draft => {
+                            if (!draft) return draft;
+                            const next = [...draft.times]; next[i] = v; return { ...draft, times: next };
+                          })}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ padding: "8px 10px 0" }}>
+                  {tzPickerOpen ? (
+                    <div className="col" style={{ gap: 6 }}>
+                      <select
+                        value={cadenceDraft.timezone}
+                        onChange={e => setCadenceDraft(draft => draft && { ...draft, timezone: e.target.value })}
+                        className="input"
+                        style={{ height: 32, fontSize: "0.74rem" }}
+                      >
+                        {zoneOptions.map(z => <option key={z} value={z}>{timezoneLabel(z)}</option>)}
+                      </select>
+                      <button type="button" onClick={() => setTzPickerOpen(false)} className="pop-item" style={{ justifyContent: "center", fontSize: "0.72rem" }}>Done</button>
+                    </div>
+                  ) : (
+                    <div className="row between" style={{ gap: 6 }}>
+                      <span style={{ fontSize: "0.72rem", color: "var(--ink-3)" }}>🌍 {timezoneLabel(cadenceDraft.timezone)}</span>
+                      <button type="button" onClick={() => setTzPickerOpen(true)} style={{ fontSize: "0.7rem", color: "var(--accent-ink)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>Change</button>
+                    </div>
+                  )}
+                </div>
+
+                <p style={{ fontSize: "0.72rem", color: "var(--ink-4)", padding: "8px 10px 0" }}>
+                  {describeSchedule({ frequency: cadenceDraft.frequency, intervalMinutes: activeCadence.intervalMinutes, times: cadenceDraft.times, weekday: cadenceDraft.weekday, timezone: cadenceDraft.timezone })}
+                </p>
+                <p style={{ fontSize: "0.72rem", color: "var(--accent-ink)", fontWeight: 500, padding: "2px 10px 4px" }}>
+                  Next: {describeNextRun(computeNextRunAt({ frequency: cadenceDraft.frequency, intervalMinutes: activeCadence.intervalMinutes, times: cadenceDraft.times, weekday: cadenceDraft.weekday, timezone: cadenceDraft.timezone }), cadenceDraft.timezone)}
+                </p>
+                <button className="pop-item" style={{ justifyContent: "center", color: "var(--accent-ink)", fontWeight: 600 }}
+                  onClick={() => {
+                    patchAgent(menu.id, {
+                      cadence: { frequency: cadenceDraft.frequency, times: cadenceDraft.times, weekday: cadenceDraft.weekday, intervalMinutes: activeCadence.intervalMinutes },
+                      timezone: cadenceDraft.timezone,
+                    });
+                    setMenu(null);
+                  }}>
+                  Save schedule
+                </button>
+              </div>
+            );
+          })()}
           {menu.field === "channels" && (
             <div style={{ padding: 2 }}>
               <div className="eyebrow no-rule" style={{ padding: "6px 10px 8px" }}>Delivery channels</div>
               {([
-                { key: "telegram" as const, name: "Telegram", icon: I.tg, color: "var(--info)", handle: "@you" },
-                { key: "whatsapp" as const, name: "WhatsApp", icon: I.wa, color: "var(--accent)", handle: "coming soon" },
+                { key: "telegram" as const, name: "Telegram", icon: I.tg, color: "var(--info)" },
+                { key: "whatsapp" as const, name: "WhatsApp", icon: I.wa, color: "var(--accent)" },
               ]).map(ch => {
                 const p = activeAgent.platforms.find(x => x.platform === ch.key);
                 const onx = !!p?.connected;
                 const soon = ch.key === "whatsapp";
                 return (
                   <button key={ch.key} className="pop-item" style={{ opacity: soon ? 0.7 : 1 }}
-                    onClick={() => { if (soon) return; patch(menu.id, s => ({ ...s, platforms: togglePlatform(s.platforms, ch.key).map(x => x.platform === ch.key ? { ...x, handle: x.connected ? (x.handle ?? ch.handle) : x.handle } : x) })); }}>
+                    onClick={() => { if (soon) return; patchAgent(menu.id, { telegramEnabled: !onx }); }}>
                     <span style={{ color: ch.color, display: "inline-flex" }}>{ch.icon()}</span>
                     <span style={{ flex: 1, textAlign: "left" }}>
                       <span style={{ display: "block", fontSize: "0.85rem", fontWeight: 550 }}>{ch.name}</span>
@@ -396,13 +504,74 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* ── Configure modal ── */}
+      {editing && (
+        <div onClick={() => !savingEdit && setEditing(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "grid", placeItems: "center", zIndex: 100 }}>
+          <div onClick={e => e.stopPropagation()} className="card" style={{ width: 380, padding: 22, borderRadius: "var(--r-lg)" }}>
+            <div style={{ fontSize: "1rem", fontWeight: 600, marginBottom: 16 }}>Configure agent</div>
+            <div className="col" style={{ gap: 12, marginBottom: 18 }}>
+              <div>
+                <label style={{ fontSize: "0.75rem", color: "var(--ink-3)", marginBottom: 5, display: "block" }}>Name</label>
+                <input className="input" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ fontSize: "0.75rem", color: "var(--ink-3)", marginBottom: 5, display: "block" }}>Topic</label>
+                <input className="input" value={editForm.niche} onChange={e => setEditForm(f => ({ ...f, niche: e.target.value }))} />
+              </div>
+              <div>
+                <div className="row between" style={{ marginBottom: 5 }}>
+                  <label style={{ fontSize: "0.75rem", color: "var(--ink-3)" }}>Agent's role</label>
+                  {!topicPickerOpen && savedTopics && savedTopics.length > 0 && (
+                    <button type="button" onClick={() => setTopicPickerOpen(true)} className="btn btn-ghost btn-sm" style={{ height: "auto", padding: "1px 6px", fontSize: "0.72rem" }}>🔁 Swap from saved</button>
+                  )}
+                </div>
+                {topicPickerOpen ? (
+                  <SavedTopicPicker
+                    topics={savedTopics ?? []}
+                    loading={savedTopics === null}
+                    onSelect={(t) => { setEditForm(f => ({ ...f, niche: t.topic, corePrompt: t.corePrompt })); setTopicPickerOpen(false); }}
+                    onDelete={(id) => { setSavedTopics(prev => prev?.filter(t => t.id !== id) ?? prev); fetch(`/api/saved-topics/${id}`, { method: "DELETE" }).catch(() => {}); }}
+                    onClose={() => setTopicPickerOpen(false)}
+                  />
+                ) : (
+                  <>
+                    <textarea
+                      className="input"
+                      value={editForm.corePrompt}
+                      onChange={e => setEditForm(f => ({ ...f, corePrompt: e.target.value }))}
+                      placeholder="The research directive locked in with Leora — what this agent watches for and prioritizes."
+                      rows={4}
+                      style={{ height: "auto", padding: "10px 12px", resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }}
+                    />
+                    <p style={{ fontSize: "0.7rem", color: "var(--ink-4)", marginTop: 5 }}>Locked in via the onboarding chat — tweak it here, or swap in a saved topic.</p>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setEditing(null)} disabled={savingEdit}>Cancel</button>
+              <button
+                className="btn btn-primary btn-sm"
+                disabled={savingEdit || !editForm.name.trim() || !editForm.niche.trim()}
+                onClick={async () => {
+                  setSavingEdit(true);
+                  await patchAgent(editing.id, { name: editForm.name.trim(), niche: editForm.niche.trim(), topics: [editForm.niche.trim()], corePrompt: editForm.corePrompt.trim() });
+                  setSavingEdit(false);
+                  setEditing(null);
+                }}
+              >
+                {savingEdit ? <span className="spinner" style={{ width: 13, height: 13 }} /> : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         .dash-split { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; }
         @media (max-width: 860px) { .dash-split { grid-template-columns: 1fr; } }
         .stat-tile { transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease); }
         .stat-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
-        .ask-bar { transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease); }
-        .ask-bar:focus-within { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--ring), var(--shadow-sm); }
         .brief-row { transition: background 0.15s var(--ease); }
         .brief-row:hover { background: var(--surface-2); }
         .brief-arrow { transition: transform 0.2s var(--ease), color 0.2s var(--ease); }

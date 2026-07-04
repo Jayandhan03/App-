@@ -9,9 +9,8 @@ import Logo from "@/components/Logo";
 
 const LINKS = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/dashboard#agents", label: "Agents" },
   { href: "/delivery", label: "Delivery" },
-  { href: "/test-agent", label: "Ask" },
+  { href: "/test-agent", label: "Create agent" },
 ];
 
 /** Shared top navigation for the signed-in product surfaces. */
@@ -36,7 +35,7 @@ export default function AppNav() {
     >
       <div className="container between" style={{ height: "var(--nav-h)", display: "flex", alignItems: "center" }}>
         {/* Brand */}
-        <Link href="/dashboard" className="row" style={{ gap: 10 }}>
+        <Link href="/" className="row" style={{ gap: 10 }}>
           <Logo />
           <span style={{ fontWeight: 600, fontSize: "0.98rem", letterSpacing: "-0.02em", color: "var(--ink)" }}>Leora</span>
         </Link>
@@ -110,7 +109,7 @@ export default function AppNav() {
                 <div className="hairline" style={{ margin: "4px 0" }} />
                 <Link href="/dashboard" className="menu-row">Dashboard</Link>
                 <Link href="/delivery" className="menu-row">Delivery channels</Link>
-                <Link href="/test-agent" className="menu-row">Ask an agent</Link>
+                <Link href="/test-agent" className="menu-row">Create an agent</Link>
                 <div className="hairline" style={{ margin: "4px 0" }} />
                 <button onClick={() => signOut({ callbackUrl: "/" })} className="menu-row" style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "var(--danger)" }}>
                   Sign out
