@@ -21,6 +21,12 @@ const STEPS = [
   { t: "You're set", d: "Briefings now arrive right in your Telegram chat." },
 ];
 
+const WA_STEPS = [
+  { t: "Tap connect", d: "We open WhatsApp with a pre-filled message to our number." },
+  { t: "Hit send", d: "One tap links your account — no typing required." },
+  { t: "You're set", d: "Briefings now arrive right in your WhatsApp chat." },
+];
+
 export default function Delivery() {
   const { status } = useSession();
   const router = useRouter();
@@ -32,6 +38,13 @@ export default function Delivery() {
   const [tgTestSent, setTgTestSent] = useState(false);
   const [tgError, setTgError] = useState<string | null>(null);
 
+  const [waConnected, setWaConnected] = useState(false);
+  const [waId, setWaId] = useState<string | null>(null);
+  const [waConnecting, setWaConnecting] = useState(false);
+  const [waTesting, setWaTesting] = useState(false);
+  const [waTestSent, setWaTestSent] = useState(false);
+  const [waError, setWaError] = useState<string | null>(null);
+
   useEffect(() => { if (status === "unauthenticated") router.replace("/signin"); }, [status, router]);
 
   useEffect(() => {
@@ -39,6 +52,15 @@ export default function Delivery() {
       try {
         const res = await fetch("/api/telegram-auth");
         if (res.ok) { const d = await res.json(); if (d.connected) { setTgConnected(true); setTgUsername(d.username ?? d.first_name ?? null); } }
+      } catch { /* silent */ }
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/whatsapp-auth");
+        if (res.ok) { const d = await res.json(); if (d.connected) { setWaConnected(true); setWaId(d.waId ?? null); } }
       } catch { /* silent */ }
     })();
   }, []);
@@ -55,6 +77,19 @@ export default function Delivery() {
     }, 2500);
     return () => clearInterval(id);
   }, [tgConnecting, tgConnected]);
+
+  useEffect(() => {
+    if (!waConnecting || waConnected) return;
+    const start = Date.now();
+    const id = setInterval(async () => {
+      if (Date.now() - start > 180_000) { clearInterval(id); setWaConnecting(false); setWaError("Timed out. Tap connect to try again."); return; }
+      try {
+        const res = await fetch("/api/whatsapp-auth");
+        if (res.ok) { const d = await res.json(); if (d.connected) { clearInterval(id); setWaConnecting(false); setWaConnected(true); setWaId(d.waId ?? null); } }
+      } catch { /* keep polling */ }
+    }, 2500);
+    return () => clearInterval(id);
+  }, [waConnecting, waConnected]);
 
   const handleConnect = async () => {
     setTgError(null); setTgConnecting(true);
@@ -75,11 +110,30 @@ export default function Delivery() {
     } catch { setTgError("Network error — try again."); } finally { setTgTesting(false); }
   };
 
+  const handleWaConnect = async () => {
+    setWaError(null); setWaConnecting(true);
+    try {
+      const res = await fetch("/api/whatsapp-auth", { method: "POST" });
+      const d = await res.json();
+      if (!res.ok || !d.deepLink) { setWaConnecting(false); setWaError(d.error ?? "Could not start connection."); return; }
+      window.open(d.deepLink, "_blank", "noopener,noreferrer");
+    } catch { setWaConnecting(false); setWaError("Network error — try again."); }
+  };
+  const handleWaDisconnect = async () => { setWaError(null); try { await fetch("/api/whatsapp-auth", { method: "DELETE" }); } catch { /* ignore */ } setWaConnected(false); setWaId(null); setWaConnecting(false); setWaTestSent(false); };
+  const handleWaTest = async () => {
+    if (waTesting) return; setWaTesting(true); setWaError(null); setWaTestSent(false);
+    try {
+      const res = await fetch("/api/whatsapp-test", { method: "POST" });
+      if (res.ok) { setWaTestSent(true); setTimeout(() => setWaTestSent(false), 4000); }
+      else { const e = await res.json().catch(() => ({})); setWaError(e.error ?? "Test failed."); }
+    } catch { setWaError("Network error — try again."); } finally { setWaTesting(false); }
+  };
+
   if (status === "loading" || status === "unauthenticated") {
     return <div className="row center" style={{ minHeight: "100vh" }}><span className="spinner" /></div>;
   }
 
-  const anyConnected = tgConnected;
+  const anyConnected = tgConnected || waConnected;
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
@@ -184,24 +238,71 @@ export default function Delivery() {
               </div>
             </div>
 
-            {/* WhatsApp — coming soon */}
-            <div className="card" style={{ padding: 22 }}>
-              <div className="row between wrap" style={{ gap: 10 }}>
+            {/* WhatsApp */}
+            <div className={`card ${waConnected ? "card-featured" : ""}`} style={{ overflow: "hidden" }}>
+              <div className="row between wrap" style={{ padding: 22, borderBottom: "1px solid var(--line)", gap: 10 }}>
                 <div className="row" style={{ gap: 13 }}>
-                  <span className="row center" style={{ width: 44, height: 44, borderRadius: "var(--r-md)", background: "#25D366", opacity: 0.9, flexShrink: 0 }}><WaIcon size={22} /></span>
+                  <span className="row center" style={{ width: 44, height: 44, borderRadius: "var(--r-md)", background: "#25D366", flexShrink: 0, boxShadow: "0 6px 18px rgba(37,211,102,0.3)" }}><WaIcon size={22} /></span>
                   <div>
                     <div style={{ fontSize: "1rem", fontWeight: 600, letterSpacing: "-0.02em" }}>WhatsApp</div>
-                    <div style={{ fontSize: "0.8rem", color: "var(--ink-3)" }}>Voice notes straight to WhatsApp</div>
+                    <div style={{ fontSize: "0.8rem", color: "var(--ink-3)" }}>Voice-note updates in your chat</div>
                   </div>
                 </div>
-                <span className="badge badge-warn"><span className="dot" style={{ background: "var(--warn)" }} /> Coming soon</span>
+                <span className={`badge ${waConnected ? "badge-accent" : "badge-muted"}`}>
+                  <span className={waConnected ? "dot dot-live" : "dot"} style={{ background: waConnected ? "var(--accent)" : "var(--ink-4)" }} />
+                  {waConnected ? "Connected" : waConnecting ? "Connecting" : "Not connected"}
+                </span>
               </div>
-              <p style={{ fontSize: "0.85rem", color: "var(--ink-2)", lineHeight: 1.6, margin: "16px 0" }}>
-                WhatsApp delivery is on the way. We&apos;re finishing the official integration — you&apos;ll link your number right here soon.
-              </p>
-              <button disabled className="btn" style={{ width: "100%", background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--ink-4)" }}>
-                <WaIcon size={16} color="currentColor" /> Connect WhatsApp — Coming soon
-              </button>
+
+              <div style={{ padding: 22 }}>
+                {waConnected ? (
+                  <>
+                    <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, background: "var(--accent-soft)", borderColor: "var(--accent-line)", boxShadow: "none", animation: "riseSm 0.3s var(--ease) both" }}>
+                      <span className="row center" style={{ width: 38, height: 38, borderRadius: "var(--r-sm)", background: "#25D366", flexShrink: 0 }}><WaIcon size={19} /></span>
+                      <div>
+                        <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--accent-ink)" }}>WhatsApp connected</div>
+                        <div style={{ fontSize: "0.8rem", color: "var(--ink-2)", marginTop: 1 }}>{waId ? <>Delivering to <strong style={{ color: "var(--ink)" }}>{waId}</strong></> : "Your WhatsApp account is linked"}</div>
+                      </div>
+                    </div>
+                    <div className="row" style={{ gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+                      <button onClick={handleWaTest} disabled={waTesting} className={`btn ${waTestSent ? "btn-accent" : "btn-secondary"}`} style={{ flex: 1, minWidth: 160 }}>
+                        {waTestSent ? "✓ Sent — check WhatsApp" : waTesting ? <><span className="spinner" style={{ width: 15, height: 15 }} /> Sending…</> : "Send test message"}
+                      </button>
+                      <button onClick={handleWaDisconnect} className="btn btn-ghost" style={{ color: "var(--danger)" }}>Disconnect</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="col" style={{ gap: 2, marginBottom: 18 }}>
+                      {WA_STEPS.map((s, i) => (
+                        <div key={i} className="row" style={{ gap: 13, alignItems: "flex-start" }}>
+                          <div className="col center" style={{ alignItems: "center" }}>
+                            <span className="row center" style={{ width: 26, height: 26, borderRadius: "50%", fontSize: "0.75rem", fontWeight: 700, background: waConnecting && i === 0 ? "var(--accent)" : "var(--surface-2)", color: waConnecting && i === 0 ? "#fff" : "var(--ink-3)", border: "1px solid var(--line-2)", flexShrink: 0, transition: "background 0.3s var(--ease), color 0.3s var(--ease)" }}>{i + 1}</span>
+                            {i < WA_STEPS.length - 1 && <span style={{ width: 1.5, height: 22, background: "var(--line)" }} />}
+                          </div>
+                          <div style={{ paddingBottom: 12 }}>
+                            <div style={{ fontSize: "0.88rem", fontWeight: 600 }}>{s.t}</div>
+                            <div style={{ fontSize: "0.8rem", color: "var(--ink-3)", marginTop: 2 }}>{s.d}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {waConnecting ? (
+                      <div className="card" style={{ padding: 18, textAlign: "center", background: "var(--surface-2)", boxShadow: "none" }}>
+                        <div className="row center" style={{ gap: 9, marginBottom: 8 }}><span className="spinner" style={{ width: 15, height: 15 }} /><span style={{ fontSize: "0.88rem", fontWeight: 600 }}>Waiting for WhatsApp…</span></div>
+                        <p style={{ fontSize: "0.82rem", color: "var(--ink-2)", marginBottom: 12, lineHeight: 1.55 }}>Press <strong style={{ color: "var(--ink)" }}>SEND</strong> in the chat that opened. This updates automatically.</p>
+                        <button onClick={handleWaConnect} className="btn btn-secondary btn-sm">Reopen WhatsApp</button>
+                      </div>
+                    ) : (
+                      <button onClick={handleWaConnect} className="btn btn-lg" style={{ width: "100%", background: "#25D366", color: "#fff", boxShadow: "0 6px 20px rgba(37,211,102,0.25)" }}>
+                        <WaIcon size={18} /> Open WhatsApp &amp; connect
+                      </button>
+                    )}
+                  </>
+                )}
+                {waError && <div className="card" style={{ marginTop: 12, padding: "10px 14px", background: "var(--danger-soft)", borderColor: "var(--danger)", color: "var(--danger)", fontSize: "0.82rem", boxShadow: "none", animation: "riseSm 0.25s var(--ease) both" }}>{waError}</div>}
+                <p className="t-muted" style={{ fontSize: "0.74rem", marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--line)", textAlign: "center" }}>We only receive your WhatsApp number — never your messages or contacts.</p>
+              </div>
             </div>
           </div>
 
