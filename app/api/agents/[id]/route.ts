@@ -5,6 +5,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { connectToDatabase } from "@/lib/mongodb";
 import AgentModel from "@/models/Agent";
 import TelegramLink from "@/models/TelegramLink";
+import WhatsAppLink from "@/models/WhatsAppLink";
 import { LANGUAGE_CODES } from "@/lib/agentConstants";
 import { computeNextRunAt } from "@/lib/schedule";
 import { toClientShape } from "@/app/api/agents/route";
@@ -105,8 +106,22 @@ export async function PATCH(req: Request, { params }: Ctx) {
         connected = !!tgLink;
         handle = tgLink?.username ? `@${tgLink.username}` : null;
       }
-      const platforms = agent.platforms.map((p) =>
+      const platforms = (set.platforms as typeof agent.platforms ?? agent.platforms).map((p) =>
         p.platform === "telegram" ? { platform: "telegram" as const, connected, handle } : p
+      );
+      set.platforms = platforms;
+    }
+
+    if (typeof body.whatsappEnabled === "boolean") {
+      let connected = body.whatsappEnabled;
+      let handle: string | null = null;
+      if (connected) {
+        const waLink = await WhatsAppLink.findOne({ email: session.user.email }).lean();
+        connected = !!waLink;
+        handle = waLink?.waId ?? null;
+      }
+      const platforms = (set.platforms as typeof agent.platforms ?? agent.platforms).map((p) =>
+        p.platform === "whatsapp" ? { platform: "whatsapp" as const, connected, handle } : p
       );
       set.platforms = platforms;
     }

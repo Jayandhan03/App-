@@ -485,16 +485,15 @@ export default function Dashboard() {
               ]).map(ch => {
                 const p = activeAgent.platforms.find(x => x.platform === ch.key);
                 const onx = !!p?.connected;
-                const soon = ch.key === "whatsapp";
                 return (
-                  <button key={ch.key} className="pop-item" style={{ opacity: soon ? 0.7 : 1 }}
-                    onClick={() => { if (soon) return; patchAgent(menu.id, { telegramEnabled: !onx }); }}>
+                  <button key={ch.key} className="pop-item"
+                    onClick={() => patchAgent(menu.id, ch.key === "telegram" ? { telegramEnabled: !onx } : { whatsappEnabled: !onx })}>
                     <span style={{ color: ch.color, display: "inline-flex" }}>{ch.icon()}</span>
                     <span style={{ flex: 1, textAlign: "left" }}>
                       <span style={{ display: "block", fontSize: "0.85rem", fontWeight: 550 }}>{ch.name}</span>
-                      <span style={{ display: "block", fontSize: "0.72rem", color: "var(--ink-3)" }}>{soon ? "Coming soon" : onx ? (p?.handle ?? "connected") : "not connected"}</span>
+                      <span style={{ display: "block", fontSize: "0.72rem", color: "var(--ink-3)" }}>{onx ? (p?.handle ?? "connected") : "not connected"}</span>
                     </span>
-                    <span className="toggle" data-on={onx && !soon} />
+                    <span className="toggle" data-on={onx} />
                   </button>
                 );
               })}

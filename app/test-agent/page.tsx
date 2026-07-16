@@ -133,6 +133,9 @@ export default function CreateAgent() {
   const [tgError, setTgError] = useState<string | null>(null);
   const [telegramEnabled, setTelegramEnabled] = useState(true);
 
+  const [waConnected, setWaConnected] = useState(false);
+  const [whatsappEnabled, setWhatsappEnabled] = useState(true);
+
   const [deploying, setDeploying] = useState(false);
   const [deployError, setDeployError] = useState<string | null>(null);
 
@@ -195,15 +198,20 @@ export default function CreateAgent() {
     })();
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      try { const res = await fetch("/api/whatsapp-auth"); if (res.ok) { const d = await res.json(); if (d.connected) setWaConnected(true); } } catch { /* silent */ }
+    })();
+  }, []);
+
   // Keep the agent name in sync with the topic until the user edits it directly.
   useEffect(() => { if (!nameTouched) setAgentName(topic); }, [topic, nameTouched]);
 
   const isLoading = step > 0 && step < 4;
   const langLabel = (LANGS.find(x => x.code === lang) ?? LANGS[0]).label;
-  // Telegram is the only delivery channel actually wired up right now — WhatsApp
-  // and in-app are coming soon — so a connected + enabled Telegram is what
-  // "a delivery channel is selected" means today. Deploy is blocked without one.
-  const hasDeliveryChannel = telegramEnabled && tgConnected;
+  // In-app is coming soon, so "a delivery channel is selected" means a connected
+  // + enabled Telegram or WhatsApp. Deploy is blocked without one of those.
+  const hasDeliveryChannel = (telegramEnabled && tgConnected) || (whatsappEnabled && waConnected);
 
   const nextRunText = useMemo(() => {
     const next = computeNextRunAt({ frequency: cadence.label, intervalMinutes: cadence.intervalMinutes, times, weekday, timezone });
@@ -305,6 +313,7 @@ export default function CreateAgent() {
           timezone,
           scheduleEnabled: true,
           telegramEnabled: telegramEnabled && tgConnected,
+          whatsappEnabled: whatsappEnabled && waConnected,
           corePrompt: locked?.corePrompt ?? "",
           onboardingSummary: locked?.summary ?? "",
           keywords: locked?.keywords ?? [],
@@ -578,11 +587,17 @@ export default function CreateAgent() {
                   </Link>
                 )}
 
-                {/* WhatsApp — coming soon */}
-                <div className="row between" style={{ width: "100%", padding: "12px 14px", borderRadius: "var(--r-md)", border: "1px solid var(--line)", background: "var(--surface-2)", opacity: 0.55 }}>
-                  <span className="row" style={{ gap: 9 }}><WaIcon size={15} color="var(--ink-3)" /> WhatsApp</span>
-                  <span className="badge badge-muted" style={{ fontSize: "0.62rem" }}>Coming soon</span>
-                </div>
+                {/* WhatsApp */}
+                {waConnected ? (
+                  <button type="button" onClick={() => setWhatsappEnabled(v => !v)} className="row between" style={{ width: "100%", padding: "12px 14px", borderRadius: "var(--r-md)", border: `1px solid ${whatsappEnabled ? "var(--accent-line)" : "var(--line-2)"}`, background: whatsappEnabled ? "var(--accent-soft)" : "var(--surface-2)", cursor: "pointer" }}>
+                    <span className="row" style={{ gap: 9 }}><WaIcon size={15} color="#25D366" /> Send to WhatsApp</span>
+                    <span className="toggle" data-on={whatsappEnabled} />
+                  </button>
+                ) : (
+                  <Link href="/delivery" className="row center" style={{ height: 46, borderRadius: "var(--r-md)", border: "1px dashed var(--info-line)", color: "var(--info)", fontSize: "0.82rem", fontWeight: 500, gap: 7 }}>
+                    <WaIcon size={13} /> Connect WhatsApp to receive scheduled briefings
+                  </Link>
+                )}
 
                 {/* In-app — coming soon */}
                 <div className="row between" style={{ width: "100%", padding: "12px 14px", borderRadius: "var(--r-md)", border: "1px solid var(--line)", background: "var(--surface-2)", opacity: 0.55 }}>

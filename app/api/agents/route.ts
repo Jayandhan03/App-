@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { connectToDatabase } from "@/lib/mongodb";
 import AgentModel, { IAgent } from "@/models/Agent";
 import TelegramLink from "@/models/TelegramLink";
+import WhatsAppLink from "@/models/WhatsAppLink";
 import { LANGUAGE_CODES } from "@/lib/agentConstants";
 import { computeNextRunAt } from "@/lib/schedule";
 
@@ -148,20 +149,27 @@ export async function POST(req: Request) {
     const timezone = typeof body.timezone === "string" && body.timezone ? body.timezone : "UTC";
     const scheduleEnabled = body.scheduleEnabled !== false;
 
-    // Never trust client-supplied connection state — derive Telegram delivery from the real link.
-    const tgLink = await TelegramLink.findOne({ email: session.user.email }).lean();
+    // Never trust client-supplied connection state — derive delivery from the real links.
+    const [tgLink, waLink] = await Promise.all([
+      TelegramLink.findOne({ email: session.user.email }).lean(),
+      WhatsAppLink.findOne({ email: session.user.email }).lean(),
+    ]);
     const wantsTelegram = body.telegramEnabled !== false;
+    const wantsWhatsapp = body.whatsappEnabled !== false;
     const platforms = [
       {
         platform: "telegram" as const,
         connected: !!tgLink && wantsTelegram,
         handle: tgLink?.username ? `@${tgLink.username}` : null,
       },
-      { platform: "whatsapp" as const, connected: false, handle: null },
+      {
+        platform: "whatsapp" as const,
+        connected: !!waLink && wantsWhatsapp,
+        handle: waLink?.waId ?? null,
+      },
     ];
 
-    // A delivery channel is mandatory — Telegram is the only one actually wired
-    // up today (WhatsApp/in-app are coming soon), so this is the real gate.
+    // A delivery channel is mandatory.
     if (!platforms.some(p => p.connected)) {
       return NextResponse.json({ success: false, error: "Select a delivery channel to deploy this agent." }, { status: 422 });
     }
