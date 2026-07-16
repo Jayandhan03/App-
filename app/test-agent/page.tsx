@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef, useMemo } from "react";
 import AppNav from "@/components/AppNav";
+import Logo from "@/components/Logo";
 import AgentOnboardingChat, { LockedTopic } from "@/components/AgentOnboardingChat";
 import SavedTopicPicker, { SavedTopicShape } from "@/components/SavedTopicPicker";
 import TimePicker from "@/components/TimePicker";
@@ -600,9 +601,15 @@ export default function CreateAgent() {
                 )}
 
                 {/* In-app — coming soon */}
-                <div className="row between" style={{ width: "100%", padding: "12px 14px", borderRadius: "var(--r-md)", border: "1px solid var(--line)", background: "var(--surface-2)", opacity: 0.55 }}>
-                  <span className="row" style={{ gap: 9 }}>📲 In-app</span>
-                  <span className="badge badge-muted" style={{ fontSize: "0.62rem" }}>Coming soon</span>
+                <div className="row between" style={{ width: "100%", padding: "12px 14px", borderRadius: "var(--r-md)", border: "1px solid var(--line)", background: "var(--surface-2)" }}>
+                  <span className="row" style={{ gap: 10 }}>
+                    <Logo size={24} />
+                    <span>
+                      <span style={{ display: "block", fontSize: "0.85rem", fontWeight: 550 }}>In the Leora app</span>
+                      <span style={{ display: "block", fontSize: "0.72rem", color: "var(--ink-3)" }}>Native mobile inbox — coming soon</span>
+                    </span>
+                  </span>
+                  <span className="badge badge-muted" style={{ fontSize: "0.62rem", flexShrink: 0 }}>Coming soon</span>
                 </div>
               </div>
 
