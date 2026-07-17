@@ -42,11 +42,11 @@ export async function POST() {
     });
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      return NextResponse.json(
-        { success: false, error: err.error?.message ?? err.message ?? "Kapso API error" },
-        { status: 502 }
-      );
+      const rawBody = await res.text();
+      const err = (() => { try { return JSON.parse(rawBody); } catch { return {}; } })();
+      console.error("[whatsapp-test] Kapso rejected message", { status: res.status, body: rawBody });
+      const message = err.error?.message ?? err.error?.error_data?.details ?? err.message ?? `Kapso API error (HTTP ${res.status})`;
+      return NextResponse.json({ success: false, error: message }, { status: 502 });
     }
 
     return NextResponse.json({ success: true });
