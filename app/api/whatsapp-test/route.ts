@@ -43,10 +43,19 @@ export async function POST() {
 
     if (!res.ok) {
       const rawBody = await res.text();
-      const err = (() => { try { return JSON.parse(rawBody); } catch { return {}; } })();
+      const err = (() => { try { return JSON.parse(rawBody); } catch { return null; } })();
       console.error("[whatsapp-test] Kapso rejected message", { status: res.status, body: rawBody });
-      const message = err.error?.message ?? err.error?.error_data?.details ?? err.message ?? `Kapso API error (HTTP ${res.status})`;
-      return NextResponse.json({ success: false, error: message }, { status: 502 });
+      // Kapso's error shape isn't fully known yet — try Meta Graph's { error: { message } },
+      // then common REST conventions (Rails-style { error }/{ errors }, { message }, { detail }),
+      // falling back to the raw body itself so nothing is ever silently swallowed again.
+      let message: string;
+      if (typeof err?.error?.message === "string") message = err.error.message;
+      else if (typeof err?.error === "string") message = err.error;
+      else if (err?.errors) message = JSON.stringify(err.errors);
+      else if (typeof err?.message === "string") message = err.message;
+      else if (typeof err?.detail === "string") message = err.detail;
+      else message = rawBody.slice(0, 300) || `Kapso API error (HTTP ${res.status})`;
+      return NextResponse.json({ success: false, error: `HTTP ${res.status}: ${message}` }, { status: 502 });
     }
 
     return NextResponse.json({ success: true });
