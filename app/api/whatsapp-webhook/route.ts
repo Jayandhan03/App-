@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import WhatsAppLink from "@/models/WhatsAppLink";
 import WhatsAppLinkToken from "@/models/WhatsAppLinkToken";
+import PendingWhatsAppDelivery from "@/models/PendingWhatsAppDelivery";
 
 const KAPSO_API_KEY = process.env.KAPSO_API_KEY!;
 const KAPSO_PHONE_NUMBER_ID = process.env.KAPSO_PHONE_NUMBER_ID ?? "";
 const KAPSO_BASE = "https://api.kapso.ai/meta/whatsapp/v24.0";
 const WEBHOOK_SECRET = process.env.KAPSO_WEBHOOK_SECRET!;
+const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8000";
 
 // Confirmed empirically against a real Kapso delivery: signature is
 // hex(HMAC-SHA256(secret_key, raw_request_body)) in the x-webhook-signature header.
@@ -34,9 +37,17 @@ async function sendText(to: string, body: string) {
   }).catch(() => {});
 }
 
-// Pull the inbound text + sender wa_id out of Kapso's webhook payload.
-// Confirmed real shape: { message: { from, text: { body }, kapso: { direction, content } }, conversation, phone_number_id }
-function parseInboundMessage(body: any): { from: string; text: string } | null {
+type InboundMessage =
+  | { kind: "text"; from: string; text: string }
+  | { kind: "button"; from: string; payload: string };
+
+// Pull the inbound event out of Kapso's webhook payload.
+// Confirmed real shape for plain text: { message: { from, text: { body }, kapso: { direction, content } }, conversation, phone_number_id }
+// Button-tap shape is Meta's standard interactive reply — NOT yet confirmed
+// against a live Kapso payload (no template has been approved/tested yet).
+// If taps aren't being picked up once testing starts, log the raw body and
+// adjust the paths below to match what Kapso actually sends.
+function parseInboundMessage(body: any): InboundMessage | null {
   const message = body?.message;
   if (!message) return null;
   if (message.kapso?.direction && message.kapso.direction !== "inbound") return null;
@@ -44,8 +55,46 @@ function parseInboundMessage(body: any): { from: string; text: string } | null {
   const from: string | undefined = message.from;
   if (!from) return null;
 
+  // Meta's Quick Reply tap shape: message.interactive.button_reply.id carries
+  // back whatever payload we sent the button with (the pending-delivery id).
+  // Also covers the older non-interactive "button" message type as a fallback.
+  const buttonReply = message.interactive?.button_reply ?? message.button;
+  const payload: string | undefined = buttonReply?.id ?? buttonReply?.payload;
+  if (payload) {
+    return { kind: "button", from: String(from), payload: String(payload) };
+  }
+
   const text = message.text?.body ?? message.kapso?.content ?? "";
-  return { from: String(from), text: String(text ?? "") };
+  return { kind: "text", from: String(from), text: String(text ?? "") };
+}
+
+// A button tap resolves to a queued briefing; ask the FastAPI backend (which
+// owns the GridFS-held audio and the real Kapso audio-send flow) to fulfill it.
+async function handleButtonReply(from: string, payload: string) {
+  if (!mongoose.isValidObjectId(payload)) return;
+
+  await connectToDatabase();
+  // Scope to waId too so a tap can only ever release audio queued for the
+  // same phone number it was queued for.
+  const pending = await PendingWhatsAppDelivery.findOne({ _id: payload, waId: from, status: "pending" });
+  if (!pending) {
+    await sendText(from, "That briefing isn't available anymore — it may have already been sent or expired.");
+    return;
+  }
+
+  try {
+    const res = await fetch(`${BACKEND}/api/v1/whatsapp/deliver-pending`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pending_id: payload }),
+      signal: AbortSignal.timeout(55000),
+    });
+    if (!res.ok) {
+      console.error("[whatsapp-webhook] deliver-pending failed", res.status, await res.text().catch(() => ""));
+    }
+  } catch (err: unknown) {
+    console.error("[whatsapp-webhook] deliver-pending request failed", err);
+  }
 }
 
 // Kapso sends webhook events here once registered (see GET ?setup=1 below).
@@ -59,6 +108,11 @@ export async function POST(req: Request) {
     const body = JSON.parse(rawBody);
     const inbound = parseInboundMessage(body);
     if (!inbound) return NextResponse.json({ ok: true });
+
+    if (inbound.kind === "button") {
+      await handleButtonReply(inbound.from, inbound.payload);
+      return NextResponse.json({ ok: true });
+    }
 
     const { from, text } = inbound;
     const match = text.trim().match(/^LINK-([a-f0-9]+)$/i);

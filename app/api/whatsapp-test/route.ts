@@ -4,22 +4,17 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { connectToDatabase } from "@/lib/mongodb";
 import WhatsAppLink from "@/models/WhatsAppLink";
 
-const KAPSO_API_KEY = process.env.KAPSO_API_KEY!;
-const KAPSO_PHONE_NUMBER_ID = process.env.KAPSO_PHONE_NUMBER_ID ?? "";
-const KAPSO_BASE = "https://api.kapso.ai/meta/whatsapp/v24.0";
+const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8000";
 
-// POST — send a test ping to the current user's linked WhatsApp number.
+// POST — exercise the real confirm-then-deliver flow: sends the approved
+// "briefing ready" template (not raw text, which 422s outside the 24h
+// session window) and queues a short test clip that arrives once the user
+// taps the button.
 export async function POST() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
       return NextResponse.json({ success: false, error: "Not authenticated" }, { status: 401 });
-    }
-    if (!KAPSO_PHONE_NUMBER_ID) {
-      return NextResponse.json(
-        { success: false, error: "WhatsApp is not configured yet (missing KAPSO_PHONE_NUMBER_ID)." },
-        { status: 500 }
-      );
     }
 
     await connectToDatabase();
@@ -28,34 +23,19 @@ export async function POST() {
       return NextResponse.json({ success: false, error: "WhatsApp not connected" }, { status: 404 });
     }
 
-    const res = await fetch(`${KAPSO_BASE}/${KAPSO_PHONE_NUMBER_ID}/messages`, {
+    const res = await fetch(`${BACKEND}/api/v1/whatsapp/test-ping`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-API-Key": KAPSO_API_KEY },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to: link.waId,
-        type: "text",
-        text: { body: "✅ Leora test successful! Your WhatsApp is connected — audio briefings will be delivered here." },
-      }),
-      signal: AbortSignal.timeout(10_000),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: session.user.email }),
+      signal: AbortSignal.timeout(55000),
     });
 
     if (!res.ok) {
       const rawBody = await res.text();
       const err = (() => { try { return JSON.parse(rawBody); } catch { return null; } })();
-      console.error("[whatsapp-test] Kapso rejected message", { status: res.status, body: rawBody });
-      // Kapso's error shape isn't fully known yet — try Meta Graph's { error: { message } },
-      // then common REST conventions (Rails-style { error }/{ errors }, { message }, { detail }),
-      // falling back to the raw body itself so nothing is ever silently swallowed again.
-      let message: string;
-      if (typeof err?.error?.message === "string") message = err.error.message;
-      else if (typeof err?.error === "string") message = err.error;
-      else if (err?.errors) message = JSON.stringify(err.errors);
-      else if (typeof err?.message === "string") message = err.message;
-      else if (typeof err?.detail === "string") message = err.detail;
-      else message = rawBody.slice(0, 300) || `Kapso API error (HTTP ${res.status})`;
-      return NextResponse.json({ success: false, error: `HTTP ${res.status}: ${message}` }, { status: 502 });
+      console.error("[whatsapp-test] backend rejected test-ping", { status: res.status, body: rawBody });
+      const message = typeof err?.detail === "string" ? err.detail : rawBody.slice(0, 300) || `Backend error (HTTP ${res.status})`;
+      return NextResponse.json({ success: false, error: message }, { status: 502 });
     }
 
     return NextResponse.json({ success: true });
