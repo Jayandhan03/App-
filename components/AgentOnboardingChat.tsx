@@ -18,6 +18,10 @@ function toLocked(raw: RawLocked): LockedTopic {
   return { topic: raw.topic, summary: raw.summary, corePrompt: raw.core_prompt, keywords: raw.keywords ?? [], region: raw.region || "Global" };
 }
 
+// Shown immediately on mount, no LLM call — the backend only needs to reason
+// once there's an actual user message to react to.
+const OPENING_MESSAGE = "Hi, I'm Leora—what updates would you like your research agent to watch for?";
+
 /**
  * Leora's single-purpose onboarding chat: lock in what one agent should research.
  * Flow is enforced server-side (greet -> user request -> summary + 3 follow-ups ->
@@ -39,7 +43,13 @@ export default function AgentOnboardingChat({ seed, onLocked }: { seed?: string;
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    void send([], true);
+    setMessages([{ role: "assistant", content: OPENING_MESSAGE }]);
+    // Auto-forward a seeded suggestion (from the dashboard "Ask" bar) right away —
+    // no need to wait on anything since the greeting is no longer a network call.
+    if (seed && seed.trim() && !seedSent.current) {
+      seedSent.current = true;
+      setTimeout(() => pushAndSend(seed), 250);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -47,7 +57,7 @@ export default function AgentOnboardingChat({ seed, onLocked }: { seed?: string;
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
-  async function send(history: Msg[], isOpening = false) {
+  async function send(history: Msg[]) {
     setLoading(true);
     setError(null);
     try {
@@ -67,12 +77,7 @@ export default function AgentOnboardingChat({ seed, onLocked }: { seed?: string;
         setLocked(l);
         onLocked(l);
       }
-      if (!isOpening) setTimeout(() => inputRef.current?.focus(), 50);
-      // Auto-forward a seeded suggestion once the greeting has arrived.
-      if (isOpening && seed && seed.trim() && !seedSent.current) {
-        seedSent.current = true;
-        setTimeout(() => pushAndSend(seed), 250);
-      }
+      setTimeout(() => inputRef.current?.focus(), 50);
     } catch {
       setError("Network error — please try again.");
     } finally {
@@ -81,11 +86,14 @@ export default function AgentOnboardingChat({ seed, onLocked }: { seed?: string;
   }
 
   function pushAndSend(text: string) {
-    if (!text.trim() || loading || locked) return;
-    const next: Msg[] = [...messages, { role: "user", content: text.trim() }];
-    setMessages(next);
+    const trimmed = text.trim();
+    if (!trimmed || loading || locked) return;
     setInput("");
-    void send(next);
+    setMessages(prev => {
+      const next: Msg[] = [...prev, { role: "user", content: trimmed }];
+      void send(next);
+      return next;
+    });
   }
 
   const userTurns = messages.filter(m => m.role === "user").length;
