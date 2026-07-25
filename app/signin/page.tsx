@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import Link from "next/link";
 import { useSession, signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import ThemeToggle from "@/components/ThemeToggle";
 import Logo from "@/components/Logo";
+import { isNativeApp, openGoogleSignIn } from "@/lib/capacitor";
 
 const AGENTS = [
   { icon: "📈", n: "Finance", s: "Recording your 8 AM brief" },
@@ -14,10 +15,42 @@ const AGENTS = [
 ];
 
 export default function SignIn() {
+  return (
+    <Suspense>
+      <SignInInner />
+    </Suspense>
+  );
+}
+
+function SignInInner() {
   const { status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Set by the mobile shell's Custom Tab handoff (see lib/capacitor.ts) so this
+  // page redirects into the auth bridge instead of straight to the dashboard.
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
 
-  useEffect(() => { if (status === "authenticated") router.replace("/dashboard"); }, [status, router]);
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    // /api/auth/mobile-bridge is a server route, not an app page — force a
+    // real navigation instead of a client-side router transition.
+    if (callbackUrl.startsWith("/api/")) {
+      window.location.href = callbackUrl;
+    } else {
+      router.replace(callbackUrl);
+    }
+  }, [status, callbackUrl, router]);
+
+  const handleGoogleSignIn = () => {
+    // Inside the app's own embedded WebView, Google blocks OAuth outright —
+    // hand off to a system browser tab instead. Inside a normal browser
+    // (including the Custom Tab we just opened), sign in as usual.
+    if (isNativeApp()) {
+      openGoogleSignIn();
+    } else {
+      signIn("google", { callbackUrl });
+    }
+  };
 
   if (status === "loading" || status === "authenticated") {
     return <div className="row center" style={{ minHeight: "100vh" }}><span className="spinner" /></div>;
@@ -43,7 +76,7 @@ export default function SignIn() {
             <div className="card" style={{ padding: 28, borderRadius: "var(--r-xl)" }}>
               <button
                 id="google-signin-btn"
-                onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+                onClick={handleGoogleSignIn}
                 className="btn btn-lg btn-secondary"
                 style={{ width: "100%" }}
               >
