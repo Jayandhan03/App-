@@ -161,7 +161,7 @@ export default function Delivery() {
                   <span className="row center" style={{ width: 44, height: 44, borderRadius: "var(--r-md)", background: "var(--solid)", color: "var(--solid-ink)", flexShrink: 0 }}><AppIcon size={22} /></span>
                   <div>
                     <div style={{ fontSize: "1rem", fontWeight: 600, letterSpacing: "-0.02em" }}>In the Leora app</div>
-                    <div style={{ fontSize: "0.8rem", color: "var(--ink-3)" }}>Your voice-note inbox · web now, mobile soon</div>
+                    <div style={{ fontSize: "0.8rem", color: "var(--ink-3)" }}>Your voice-note inbox · web and mobile</div>
                   </div>
                 </div>
                 <span className="badge badge-accent"><span className="dot dot-live" /> Always on</span>
