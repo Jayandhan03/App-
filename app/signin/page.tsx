@@ -91,7 +91,7 @@ export default function SignIn() {
             </div>
 
             <p className="t-muted" style={{ textAlign: "center", fontSize: "0.75rem", marginTop: 20, lineHeight: 1.6 }}>
-              By continuing you agree to our <a href="#" style={{ color: "var(--ink-2)", textDecoration: "underline" }}>Terms</a> and <a href="#" style={{ color: "var(--ink-2)", textDecoration: "underline" }}>Privacy Policy</a>.
+              By continuing you agree to our <Link href="/terms" style={{ color: "var(--ink-2)", textDecoration: "underline" }}>Terms</Link> and <Link href="/privacy" style={{ color: "var(--ink-2)", textDecoration: "underline" }}>Privacy Policy</Link>.
             </p>
             <div style={{ textAlign: "center", marginTop: 12 }}>
               <Link href="/" className="nav-link" style={{ fontSize: "0.82rem" }}>← Back to home</Link>
