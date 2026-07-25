@@ -12,8 +12,15 @@ export function isNativeApp(): boolean {
 // surface that.
 export async function nativeGoogleSignIn(): Promise<void> {
     const { GoogleAuth } = await import("@southdevs/capacitor-google-auth");
-    const user = await GoogleAuth.signIn({ scopes: ["profile", "email"] });
-    const idToken = user.authentication.idToken;
+
+    let idToken: string | undefined;
+    try {
+        const user = await GoogleAuth.signIn({ scopes: ["profile", "email"] });
+        idToken = user.authentication.idToken;
+    } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : JSON.stringify(err);
+        throw new Error(`native picker: ${msg}`);
+    }
 
     const res = await fetch("/api/auth/mobile-google", {
         method: "POST",
@@ -22,6 +29,7 @@ export async function nativeGoogleSignIn(): Promise<void> {
     });
 
     if (!res.ok) {
-        throw new Error("mobile-google sign-in failed");
+        const body = await res.text().catch(() => "");
+        throw new Error(`mobile-google exchange failed (${res.status}): ${body}`);
     }
 }

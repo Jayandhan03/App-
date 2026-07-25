@@ -17,7 +17,7 @@ const AGENTS = [
 export default function SignIn() {
   const { status } = useSession();
   const router = useRouter();
-  const [nativeError, setNativeError] = useState(false);
+  const [nativeError, setNativeError] = useState<string | null>(null);
 
   useEffect(() => { if (status === "authenticated") router.replace("/dashboard"); }, [status, router]);
 
@@ -25,12 +25,12 @@ export default function SignIn() {
     // Inside the native app, use the OS-level account picker (every Google
     // account on the device) instead of NextAuth's browser redirect flow.
     if (isNativeApp()) {
-      setNativeError(false);
+      setNativeError(null);
       try {
         await nativeGoogleSignIn();
         window.location.href = "/dashboard"; // hard nav so the new session cookie is picked up
-      } catch {
-        setNativeError(true);
+      } catch (err: unknown) {
+        setNativeError(err instanceof Error ? err.message : String(err));
       }
     } else {
       signIn("google", { callbackUrl: "/dashboard" });
@@ -69,8 +69,8 @@ export default function SignIn() {
                 Continue with Google
               </button>
               {nativeError && (
-                <p style={{ color: "var(--danger, #E5484D)", fontSize: "0.8rem", marginTop: 10, textAlign: "center" }}>
-                  Sign-in was cancelled or failed. Please try again.
+                <p style={{ color: "var(--danger, #E5484D)", fontSize: "0.75rem", marginTop: 10, textAlign: "center", wordBreak: "break-word" }}>
+                  Sign-in failed: {nativeError}
                 </p>
               )}
 
