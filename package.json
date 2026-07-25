@@ -12,6 +12,7 @@
   "dependencies": {
     "@capacitor/app": "^8.1.1",
     "@capacitor/core": "^8.4.2",
+    "@capacitor/push-notifications": "^8.1.2",
     "@southdevs/capacitor-google-auth": "^7.0.0",
     "@tailwindcss/postcss": "^4.2.1",
     "@types/mongoose": "^5.11.96",
@@ -111,6 +112,7 @@
     "file-entry-cache": "^8.0.0",
     "fill-range": "^7.1.1",
     "find-up": "^5.0.0",
+    "firebase": "^12.16.0",
     "flat-cache": "^4.0.1",
     "flatted": "^3.3.3",
     "for-each": "^0.3.5",

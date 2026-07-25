@@ -4,6 +4,8 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import AppNav from "@/components/AppNav";
+import { enableNotifications } from "@/lib/push";
+import { isNativeApp } from "@/lib/capacitor";
 
 function TgIcon({ size = 20, color = "#fff" }: { size?: number; color?: string }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill={color}><path d="M20.665 3.717l-17.73 6.837c-1.21.486-1.203 1.161-.222 1.462l4.552 1.42 10.532-6.645c.498-.303.953-.14.579.192l-8.533 7.701-.314 4.692c.46 0 .663-.211.921-.46l2.211-2.15 4.599 3.397c.848.467 1.457.227 1.668-.787l3.019-14.228c.309-1.239-.473-1.8-1.282-1.432z" /></svg>;
@@ -45,7 +47,36 @@ export default function Delivery() {
   const [waTestSent, setWaTestSent] = useState(false);
   const [waError, setWaError] = useState<string | null>(null);
 
+  const [notifPermission, setNotifPermission] = useState<"default" | "granted" | "denied">("default");
+  const [notifEnabling, setNotifEnabling] = useState(false);
+
   useEffect(() => { if (status === "unauthenticated") router.replace("/signin"); }, [status, router]);
+
+  useEffect(() => {
+    if (isNativeApp()) {
+      import("@capacitor/push-notifications").then(({ PushNotifications }) =>
+        PushNotifications.checkPermissions().then((p) =>
+          setNotifPermission(p.receive === "granted" ? "granted" : p.receive === "denied" ? "denied" : "default")
+        )
+      );
+    } else if (typeof window !== "undefined" && "Notification" in window) {
+      setNotifPermission(Notification.permission as "default" | "granted" | "denied");
+    }
+  }, []);
+
+  const handleEnableNotifications = async () => {
+    setNotifEnabling(true);
+    try {
+      const ok = await enableNotifications();
+      if (!isNativeApp() && typeof window !== "undefined" && "Notification" in window) {
+        setNotifPermission(Notification.permission as "default" | "granted" | "denied");
+      } else if (ok) {
+        setNotifPermission("granted");
+      }
+    } finally {
+      setNotifEnabling(false);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -169,6 +200,26 @@ export default function Delivery() {
               <p style={{ fontSize: "0.85rem", color: "var(--ink-2)", lineHeight: 1.6, margin: "16px 0 0" }}>
                 Every agent&apos;s voice notes are saved to your in-app inbox automatically — nothing to set up. Connect a chat app below to also receive them in Telegram or WhatsApp.
               </p>
+
+              <div className="row between wrap" style={{ gap: 10, marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--line)" }}>
+                <div>
+                  <div style={{ fontSize: "0.85rem", fontWeight: 550 }}>Notify me on new briefings</div>
+                  <div style={{ fontSize: "0.76rem", color: "var(--ink-3)" }}>
+                    {notifPermission === "granted" ? "Notifications are on for this device." : notifPermission === "denied" ? "Blocked — enable notifications for Leora in your browser or system settings." : "Get a push the moment an agent finishes a briefing."}
+                  </div>
+                </div>
+                {notifPermission === "granted" ? (
+                  <span className="badge badge-accent"><span className="dot dot-live" /> On</span>
+                ) : (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleEnableNotifications}
+                    disabled={notifEnabling || notifPermission === "denied"}
+                  >
+                    {notifEnabling ? "Enabling…" : "Enable notifications"}
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Telegram */}
