@@ -9,6 +9,14 @@ export const authOptions: NextAuthOptions = {
             clientId: process.env.GOOGLE_CLIENT_ID as string,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
             allowDangerousEmailAccountLinking: true,
+            authorization: {
+                params: {
+                    // Without this, Google silently signs in with whatever
+                    // account the browser already has an active session for.
+                    // This forces the account chooser every time.
+                    prompt: "select_account",
+                },
+            },
         }),
     ],
     secret: process.env.NEXTAUTH_SECRET,
