@@ -1,18 +1,14 @@
-/** Leora's mark: an audio waveform, standing in for the voice-briefing product. */
+/**
+ * Leora's mark — matches the app icon/favicon exactly (app/icon.svg): a
+ * fixed near-black rounded square with the three-bar waveform, same in
+ * every theme, same everywhere the brand mark appears.
+ */
 export default function Logo({ className = "", size = 27 }: { className?: string; size?: number }) {
   return (
-    <span className={`mark ${className}`.trim()} style={{ width: size, height: size }}>
-      <svg
-        width={Math.round(size * 0.5)}
-        height={Math.round(size * 0.5)}
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.6"
-        strokeLinecap="round"
-        aria-hidden="true"
-      >
-        <path d="M4 14v-4M8 16V8M12 19V5M16 16V8M20 14v-4" />
+    <span className={`mark ${className}`.trim()} style={{ width: size, height: size, background: "transparent", boxShadow: "none" }}>
+      <svg width={size} height={size} viewBox="0 0 128 128" aria-hidden="true">
+        <rect width="128" height="128" rx="28" fill="#131519" />
+        <path d="M40 82V52M64 92V36M88 82V46" stroke="#ffffff" strokeWidth="12" strokeLinecap="round" />
       </svg>
     </span>
   );
