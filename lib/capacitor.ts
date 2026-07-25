@@ -5,14 +5,23 @@ export function isNativeApp(): boolean {
     return Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
 }
 
-// Opens the real sign-in page in a Chrome Custom Tab (a genuine browser, not
-// the app's embedded WebView) so Google's OAuth flow is allowed to run.
-// The page redirects to /api/auth/mobile-bridge on success, which hands
-// the session back to the app via a leora:// deep link.
-export async function openGoogleSignIn() {
-    const { Browser } = await import("@capacitor/browser");
-    const callbackUrl = encodeURIComponent("/api/auth/mobile-bridge");
-    await Browser.open({
-        url: `${window.location.origin}/signin?callbackUrl=${callbackUrl}`,
+// Triggers the OS-level "choose a Google account" sheet (every account added
+// on the device under Settings > Accounts, not just whatever's signed into a
+// browser), then exchanges the resulting ID token for a session via
+// /api/auth/mobile-google. Throws on cancel/failure — caller decides how to
+// surface that.
+export async function nativeGoogleSignIn(): Promise<void> {
+    const { GoogleAuth } = await import("@southdevs/capacitor-google-auth");
+    const user = await GoogleAuth.signIn({ scopes: ["profile", "email"] });
+    const idToken = user.authentication.idToken;
+
+    const res = await fetch("/api/auth/mobile-google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
     });
+
+    if (!res.ok) {
+        throw new Error("mobile-google sign-in failed");
+    }
 }

@@ -1,7 +1,6 @@
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import SessionProvider from "@/components/SessionProvider";
-import CapacitorAuthBridge from "@/components/CapacitorAuthBridge";
 
 export const metadata: Metadata = {
   title: "Leora — Personal AI agents that brief you by voice",
@@ -59,10 +58,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <SessionProvider>
-          <CapacitorAuthBridge />
-          {children}
-        </SessionProvider>
+        <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
   );
