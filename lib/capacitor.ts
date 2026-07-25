@@ -15,6 +15,10 @@ export async function nativeGoogleSignIn(): Promise<void> {
 
     let idToken: string | undefined;
     try {
+        // The native plugin requires an explicit initialize() before signIn()
+        // will work — it's what actually builds the underlying
+        // GoogleSignInClient from the configured clientId/scopes.
+        await GoogleAuth.initialize({ scopes: ["profile", "email"] });
         const user = await GoogleAuth.signIn({ scopes: ["profile", "email"] });
         idToken = user.authentication.idToken;
     } catch (err: unknown) {
