@@ -10,6 +10,7 @@ import AgentOnboardingChat, { LockedTopic } from "@/components/AgentOnboardingCh
 import SavedTopicPicker, { SavedTopicShape } from "@/components/SavedTopicPicker";
 import TimePicker from "@/components/TimePicker";
 import { CADENCES } from "@/lib/agentConstants";
+import { useNotificationPermission } from "@/lib/push";
 import { WEEKDAYS, describeSchedule, describeNextRun, timezoneLabel, computeNextRunAt, detectTimezone, listTimezones } from "@/lib/schedule";
 
 function TgIcon({ size = 16, color = "currentColor" }: { size?: number; color?: string }) {
@@ -137,6 +138,8 @@ export default function CreateAgent() {
   const [waConnected, setWaConnected] = useState(false);
   const [whatsappEnabled, setWhatsappEnabled] = useState(true);
 
+  const { permission: notifPermission, enabling: notifEnabling, enable: handleEnableNotifications } = useNotificationPermission();
+
   const [deploying, setDeploying] = useState(false);
   const [deployError, setDeployError] = useState<string | null>(null);
 
@@ -210,9 +213,13 @@ export default function CreateAgent() {
 
   const isLoading = step > 0 && step < 4;
   const langLabel = (LANGS.find(x => x.code === lang) ?? LANGS[0]).label;
-  // In-app is coming soon, so "a delivery channel is selected" means a connected
-  // + enabled Telegram or WhatsApp. Deploy is blocked without one of those.
-  const hasDeliveryChannel = (telegramEnabled && tgConnected) || (whatsappEnabled && waConnected);
+  // The in-app inbox is always on, so every agent always has somewhere to
+  // deliver — Telegram/WhatsApp are optional extras, never required to deploy.
+  const hasDeliveryChannel = true;
+  const externalChannels = [
+    telegramEnabled && tgConnected ? "Telegram" : null,
+    whatsappEnabled && waConnected ? "WhatsApp" : null,
+  ].filter((c): c is string => Boolean(c));
 
   const nextRunText = useMemo(() => {
     const next = computeNextRunAt({ frequency: cadence.label, intervalMinutes: cadence.intervalMinutes, times, weekday, timezone });
@@ -574,7 +581,7 @@ export default function CreateAgent() {
             </Step>
 
             {/* ── 5 · Delivery channel ──────────────────────────── */}
-            <Step n={5} icon="📡" title="Delivery channel" last done={hasDeliveryChannel} extra={<span className="badge badge-warn" style={{ fontSize: "0.62rem" }}>Required</span>}>
+            <Step n={5} icon="📡" title="Delivery channel" last done={hasDeliveryChannel} extra={<span className="badge badge-muted" style={{ fontSize: "0.62rem" }}>In-app included</span>}>
               <div className="col" style={{ gap: 8 }}>
                 {/* Telegram — the only channel actually wired up */}
                 {tgConnected ? (
@@ -600,24 +607,44 @@ export default function CreateAgent() {
                   </Link>
                 )}
 
-                {/* In-app — coming soon */}
-                <div className="row between" style={{ width: "100%", padding: "12px 14px", borderRadius: "var(--r-md)", border: "1px solid var(--line)", background: "var(--surface-2)" }}>
-                  <span className="row" style={{ gap: 10 }}>
-                    <Logo size={24} />
-                    <span>
-                      <span style={{ display: "block", fontSize: "0.85rem", fontWeight: 550 }}>In the Leora app</span>
-                      <span style={{ display: "block", fontSize: "0.72rem", color: "var(--ink-3)" }}>Native mobile inbox — coming soon</span>
+                {/* In-app inbox — always on; notifications are the opt-in part */}
+                <div style={{ width: "100%", padding: "12px 14px", borderRadius: "var(--r-md)", border: "1px solid var(--line)", background: "var(--surface-2)" }}>
+                  <div className="row between">
+                    <span className="row" style={{ gap: 10 }}>
+                      <Logo size={24} />
+                      <span>
+                        <span style={{ display: "block", fontSize: "0.85rem", fontWeight: 550 }}>In the Leora app</span>
+                        <span style={{ display: "block", fontSize: "0.72rem", color: "var(--ink-3)" }}>Briefings are always saved here — web and mobile</span>
+                      </span>
                     </span>
-                  </span>
-                  <span className="badge badge-muted" style={{ fontSize: "0.62rem", flexShrink: 0 }}>Coming soon</span>
+                    <span className="badge badge-accent" style={{ fontSize: "0.62rem", flexShrink: 0 }}><span className="dot dot-live" /> Always on</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleEnableNotifications}
+                    disabled={notifEnabling || notifPermission === "denied"}
+                    className="row between"
+                    style={{
+                      width: "100%", marginTop: 10, padding: "10px 12px", borderRadius: "var(--r-sm)",
+                      border: `1px solid ${notifPermission === "granted" ? "var(--accent-line)" : "var(--line-2)"}`,
+                      background: notifPermission === "granted" ? "var(--accent-soft)" : "var(--surface)",
+                      cursor: notifPermission === "denied" ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    <span style={{ fontSize: "0.78rem" }}>
+                      {notifPermission === "granted"
+                        ? "🔔 Notify me on new briefings"
+                        : notifPermission === "denied"
+                        ? "🔕 Notifications blocked — check your browser/system settings"
+                        : notifEnabling
+                        ? "Enabling…"
+                        : "🔔 Notify me on new briefings"}
+                    </span>
+                    {notifPermission !== "denied" && <span className="toggle" data-on={notifPermission === "granted"} />}
+                  </button>
                 </div>
               </div>
 
-              {!hasDeliveryChannel && (
-                <p style={{ fontSize: "0.78rem", color: "var(--danger)", marginTop: 12 }}>
-                  ⚠ Select a delivery channel above to deploy this agent.
-                </p>
-              )}
             </Step>
 
             {/* ── Final · Review & Deploy ────────────────────────── */}
@@ -634,12 +661,8 @@ export default function CreateAgent() {
                 <span className="chip" style={{ background: "var(--surface-2)" }}>🔒 {locked ? locked.topic : "No topic yet"}</span>
                 <span className="chip" style={{ background: "var(--surface-2)" }}>🎙️ {langLabel} · {tone}</span>
                 <span className="chip" style={{ background: "var(--surface-2)" }}>{cadence.icon} {cadence.label}</span>
-                <span className="chip" style={{
-                  background: hasDeliveryChannel ? "var(--surface-2)" : "var(--danger-soft)",
-                  color: hasDeliveryChannel ? undefined : "var(--danger)",
-                  borderColor: hasDeliveryChannel ? undefined : "var(--danger)",
-                }}>
-                  📡 {hasDeliveryChannel ? "Telegram" : "No channel"}
+                <span className="chip" style={{ background: "var(--surface-2)" }}>
+                  📡 {["In-app", ...externalChannels].join(" + ")}
                 </span>
               </div>
 
@@ -659,8 +682,6 @@ export default function CreateAgent() {
                 <p className="t-muted" style={{ fontSize: "0.78rem", textAlign: "center", marginTop: 10 }}>Lock in a topic in step 1 to deploy.</p>
               ) : !agentName.trim() ? (
                 <p className="t-muted" style={{ fontSize: "0.78rem", textAlign: "center", marginTop: 10 }}>Name your agent in step 1 to deploy.</p>
-              ) : !hasDeliveryChannel ? (
-                <p style={{ fontSize: "0.78rem", color: "var(--danger)", textAlign: "center", marginTop: 10 }}>Select a delivery channel in step 5 to deploy.</p>
               ) : null}
             </div>
           </div>

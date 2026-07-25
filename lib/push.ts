@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { isNativeApp } from "@/lib/capacitor";
 
 // Public Firebase web app config — safe client-side by design (same values
@@ -72,4 +73,41 @@ async function enableNativePush(): Promise<boolean> {
 
 export async function enableNotifications(): Promise<boolean> {
   return isNativeApp() ? enableNativePush() : enableWebPush();
+}
+
+export type NotifPermission = "default" | "granted" | "denied";
+
+// Shared by every "enable notifications" control in the app (delivery page,
+// agent creation) so the permission-check + enable flow only lives once.
+export function useNotificationPermission() {
+  const [permission, setPermission] = useState<NotifPermission>("default");
+  const [enabling, setEnabling] = useState(false);
+
+  useEffect(() => {
+    if (isNativeApp()) {
+      import("@capacitor/push-notifications").then(({ PushNotifications }) =>
+        PushNotifications.checkPermissions().then((p) =>
+          setPermission(p.receive === "granted" ? "granted" : p.receive === "denied" ? "denied" : "default")
+        )
+      );
+    } else if (typeof window !== "undefined" && "Notification" in window) {
+      setPermission(Notification.permission as NotifPermission);
+    }
+  }, []);
+
+  const enable = async () => {
+    setEnabling(true);
+    try {
+      const ok = await enableNotifications();
+      if (!isNativeApp() && typeof window !== "undefined" && "Notification" in window) {
+        setPermission(Notification.permission as NotifPermission);
+      } else if (ok) {
+        setPermission("granted");
+      }
+    } finally {
+      setEnabling(false);
+    }
+  };
+
+  return { permission, enabling, enable };
 }

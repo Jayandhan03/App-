@@ -4,8 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import AppNav from "@/components/AppNav";
-import { enableNotifications } from "@/lib/push";
-import { isNativeApp } from "@/lib/capacitor";
+import { useNotificationPermission } from "@/lib/push";
 
 function TgIcon({ size = 20, color = "#fff" }: { size?: number; color?: string }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill={color}><path d="M20.665 3.717l-17.73 6.837c-1.21.486-1.203 1.161-.222 1.462l4.552 1.42 10.532-6.645c.498-.303.953-.14.579.192l-8.533 7.701-.314 4.692c.46 0 .663-.211.921-.46l2.211-2.15 4.599 3.397c.848.467 1.457.227 1.668-.787l3.019-14.228c.309-1.239-.473-1.8-1.282-1.432z" /></svg>;
@@ -47,36 +46,9 @@ export default function Delivery() {
   const [waTestSent, setWaTestSent] = useState(false);
   const [waError, setWaError] = useState<string | null>(null);
 
-  const [notifPermission, setNotifPermission] = useState<"default" | "granted" | "denied">("default");
-  const [notifEnabling, setNotifEnabling] = useState(false);
+  const { permission: notifPermission, enabling: notifEnabling, enable: handleEnableNotifications } = useNotificationPermission();
 
   useEffect(() => { if (status === "unauthenticated") router.replace("/signin"); }, [status, router]);
-
-  useEffect(() => {
-    if (isNativeApp()) {
-      import("@capacitor/push-notifications").then(({ PushNotifications }) =>
-        PushNotifications.checkPermissions().then((p) =>
-          setNotifPermission(p.receive === "granted" ? "granted" : p.receive === "denied" ? "denied" : "default")
-        )
-      );
-    } else if (typeof window !== "undefined" && "Notification" in window) {
-      setNotifPermission(Notification.permission as "default" | "granted" | "denied");
-    }
-  }, []);
-
-  const handleEnableNotifications = async () => {
-    setNotifEnabling(true);
-    try {
-      const ok = await enableNotifications();
-      if (!isNativeApp() && typeof window !== "undefined" && "Notification" in window) {
-        setNotifPermission(Notification.permission as "default" | "granted" | "denied");
-      } else if (ok) {
-        setNotifPermission("granted");
-      }
-    } finally {
-      setNotifEnabling(false);
-    }
-  };
 
   useEffect(() => {
     (async () => {
