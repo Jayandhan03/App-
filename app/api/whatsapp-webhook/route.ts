@@ -71,17 +71,22 @@ function parseInboundMessage(body: any): InboundMessage | null {
 // A button tap resolves to a queued briefing; ask the FastAPI backend (which
 // owns the GridFS-held audio and the real Kapso audio-send flow) to fulfill it.
 async function handleButtonReply(from: string, payload: string) {
-  if (!mongoose.isValidObjectId(payload)) return;
+  if (!mongoose.isValidObjectId(payload)) {
+    console.log("[whatsapp-webhook] button payload is not a Mongo id, ignoring:", payload);
+    return;
+  }
 
   await connectToDatabase();
   // Scope to waId too so a tap can only ever release audio queued for the
   // same phone number it was queued for.
   const pending = await PendingWhatsAppDelivery.findOne({ _id: payload, waId: from, status: "pending" });
   if (!pending) {
+    console.log("[whatsapp-webhook] no pending delivery for id=%s waId=%s", payload, from);
     await sendText(from, "That briefing isn't available anymore — it may have already been sent or expired.");
     return;
   }
 
+  console.log("[whatsapp-webhook] pending delivery found, calling backend deliver-pending:", payload);
   try {
     const res = await fetch(`${BACKEND}/api/v1/whatsapp/deliver-pending`, {
       method: "POST",
@@ -89,8 +94,11 @@ async function handleButtonReply(from: string, payload: string) {
       body: JSON.stringify({ pending_id: payload }),
       signal: AbortSignal.timeout(55000),
     });
+    const resBody = await res.text().catch(() => "");
     if (!res.ok) {
-      console.error("[whatsapp-webhook] deliver-pending failed", res.status, await res.text().catch(() => ""));
+      console.error("[whatsapp-webhook] deliver-pending failed", res.status, resBody);
+    } else {
+      console.log("[whatsapp-webhook] deliver-pending succeeded:", resBody);
     }
   } catch (err: unknown) {
     console.error("[whatsapp-webhook] deliver-pending request failed", err);
@@ -106,10 +114,17 @@ export async function POST(req: Request) {
     }
 
     const body = JSON.parse(rawBody);
+
+    // TEMP: dump the raw payload so we can confirm Kapso's real button-tap
+    // shape against what parseInboundMessage assumes. Remove once confirmed.
+    console.log("[whatsapp-webhook] raw payload:", JSON.stringify(body));
+
     const inbound = parseInboundMessage(body);
+    console.log("[whatsapp-webhook] parsed as:", inbound ? inbound.kind : "unrecognized (dropped)");
     if (!inbound) return NextResponse.json({ ok: true });
 
     if (inbound.kind === "button") {
+      console.log("[whatsapp-webhook] button tap from=%s payload=%s", inbound.from, inbound.payload);
       await handleButtonReply(inbound.from, inbound.payload);
       return NextResponse.json({ ok: true });
     }
