@@ -4,7 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import AppNav from "@/components/AppNav";
-import { useNotificationPermission } from "@/lib/push";
+import { useNotificationToggle } from "@/lib/push";
 
 function TgIcon({ size = 20, color = "#fff" }: { size?: number; color?: string }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill={color}><path d="M20.665 3.717l-17.73 6.837c-1.21.486-1.203 1.161-.222 1.462l4.552 1.42 10.532-6.645c.498-.303.953-.14.579.192l-8.533 7.701-.314 4.692c.46 0 .663-.211.921-.46l2.211-2.15 4.599 3.397c.848.467 1.457.227 1.668-.787l3.019-14.228c.309-1.239-.473-1.8-1.282-1.432z" /></svg>;
@@ -46,7 +46,7 @@ export default function Delivery() {
   const [waTestSent, setWaTestSent] = useState(false);
   const [waError, setWaError] = useState<string | null>(null);
 
-  const { permission: notifPermission, enabling: notifEnabling, enable: handleEnableNotifications } = useNotificationPermission();
+  const { permission: notifPermission, enabled: notifEnabled, working: notifWorking, supported: notifSupported, error: notifError, toggle: handleToggleNotifications } = useNotificationToggle();
 
   useEffect(() => { if (status === "unauthenticated") router.replace("/signin"); }, [status, router]);
 
@@ -167,31 +167,42 @@ export default function Delivery() {
                     <div style={{ fontSize: "0.8rem", color: "var(--ink-3)" }}>Your voice-note inbox · web and mobile</div>
                   </div>
                 </div>
-                <span className="badge badge-accent"><span className="dot dot-live" /> Always on</span>
+                {!notifSupported ? (
+                  <span className="badge badge-muted"><span className="dot" /> Not supported here</span>
+                ) : notifPermission === "denied" ? (
+                  <span className="badge badge-muted"><span className="dot" /> Notifications blocked</span>
+                ) : notifEnabled ? (
+                  <span className="badge badge-accent"><span className="dot dot-live" /> Notifications on</span>
+                ) : (
+                  <span className="badge badge-muted"><span className="dot" /> Notifications off</span>
+                )}
               </div>
               <p style={{ fontSize: "0.85rem", color: "var(--ink-2)", lineHeight: 1.6, margin: "16px 0 0" }}>
                 Every agent&apos;s voice notes are saved to your in-app inbox automatically — nothing to set up. Connect a chat app below to also receive them in Telegram or WhatsApp.
               </p>
 
-              <div className="row between wrap" style={{ gap: 10, marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--line)" }}>
+              <button
+                type="button"
+                onClick={handleToggleNotifications}
+                disabled={notifWorking || !notifSupported || notifPermission === "denied"}
+                className="row between wrap"
+                style={{ width: "100%", gap: 10, marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--line)", textAlign: "left", cursor: !notifSupported || notifPermission === "denied" ? "not-allowed" : "pointer" }}
+              >
                 <div>
                   <div style={{ fontSize: "0.85rem", fontWeight: 550 }}>Notify me on new briefings</div>
                   <div style={{ fontSize: "0.76rem", color: "var(--ink-3)" }}>
-                    {notifPermission === "granted" ? "Notifications are on for this device." : notifPermission === "denied" ? "Blocked — enable notifications for Leora in your browser or system settings." : "Get a push the moment an agent finishes a briefing."}
+                    {!notifSupported
+                      ? "Push notifications aren't supported in this browser."
+                      : notifPermission === "denied"
+                      ? "Blocked — enable notifications for Leora in your browser or system settings."
+                      : notifEnabled
+                      ? "Get a push the moment an agent finishes a briefing."
+                      : "Off — you won't get a push when a briefing is ready."}
                   </div>
                 </div>
-                {notifPermission === "granted" ? (
-                  <span className="badge badge-accent"><span className="dot dot-live" /> On</span>
-                ) : (
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={handleEnableNotifications}
-                    disabled={notifEnabling || notifPermission === "denied"}
-                  >
-                    {notifEnabling ? "Enabling…" : "Enable notifications"}
-                  </button>
-                )}
-              </div>
+                {notifSupported && notifPermission !== "denied" && <span className="toggle" data-on={notifEnabled} />}
+              </button>
+              {notifError && <div style={{ fontSize: "0.76rem", color: "var(--danger)", marginTop: 8 }}>{notifError}</div>}
             </div>
 
             {/* Telegram */}

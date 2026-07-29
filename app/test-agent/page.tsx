@@ -10,7 +10,7 @@ import AgentOnboardingChat, { LockedTopic } from "@/components/AgentOnboardingCh
 import SavedTopicPicker, { SavedTopicShape } from "@/components/SavedTopicPicker";
 import TimePicker from "@/components/TimePicker";
 import { CADENCES } from "@/lib/agentConstants";
-import { useNotificationPermission } from "@/lib/push";
+import { useNotificationToggle } from "@/lib/push";
 import { WEEKDAYS, describeSchedule, describeNextRun, timezoneLabel, computeNextRunAt, detectTimezone, listTimezones } from "@/lib/schedule";
 
 function TgIcon({ size = 16, color = "currentColor" }: { size?: number; color?: string }) {
@@ -138,7 +138,7 @@ export default function CreateAgent() {
   const [waConnected, setWaConnected] = useState(false);
   const [whatsappEnabled, setWhatsappEnabled] = useState(true);
 
-  const { permission: notifPermission, enabling: notifEnabling, enable: handleEnableNotifications } = useNotificationPermission();
+  const { permission: notifPermission, enabled: notifEnabled, working: notifWorking, supported: notifSupported, error: notifError, toggle: handleToggleNotifications } = useNotificationToggle();
 
   const [deploying, setDeploying] = useState(false);
   const [deployError, setDeployError] = useState<string | null>(null);
@@ -590,8 +590,9 @@ export default function CreateAgent() {
                     <span className="toggle" data-on={telegramEnabled} />
                   </button>
                 ) : (
-                  <Link href="/delivery" className="row center" style={{ height: 46, borderRadius: "var(--r-md)", border: "1px dashed var(--info-line)", color: "var(--info)", fontSize: "0.82rem", fontWeight: 500, gap: 7 }}>
-                    <TgIcon size={13} /> Connect Telegram to receive scheduled briefings
+                  <Link href="/delivery" className="row between" style={{ width: "100%", padding: "12px 14px", borderRadius: "var(--r-md)", border: "1px solid var(--line-2)", background: "var(--surface-2)" }}>
+                    <span className="row" style={{ gap: 9 }}><TgIcon size={15} color="#229ED9" /> Send to Telegram</span>
+                    <span className="badge badge-info" style={{ fontSize: "0.66rem", flexShrink: 0 }}>Connect →</span>
                   </Link>
                 )}
 
@@ -602,8 +603,9 @@ export default function CreateAgent() {
                     <span className="toggle" data-on={whatsappEnabled} />
                   </button>
                 ) : (
-                  <Link href="/delivery" className="row center" style={{ height: 46, borderRadius: "var(--r-md)", border: "1px dashed var(--info-line)", color: "var(--info)", fontSize: "0.82rem", fontWeight: 500, gap: 7 }}>
-                    <WaIcon size={13} /> Connect WhatsApp to receive scheduled briefings
+                  <Link href="/delivery" className="row between" style={{ width: "100%", padding: "12px 14px", borderRadius: "var(--r-md)", border: "1px solid var(--line-2)", background: "var(--surface-2)" }}>
+                    <span className="row" style={{ gap: 9 }}><WaIcon size={15} color="#25D366" /> Send to WhatsApp</span>
+                    <span className="badge badge-info" style={{ fontSize: "0.66rem", flexShrink: 0 }}>Connect →</span>
                   </Link>
                 )}
 
@@ -617,31 +619,38 @@ export default function CreateAgent() {
                         <span style={{ display: "block", fontSize: "0.72rem", color: "var(--ink-3)" }}>Briefings are always saved here — web and mobile</span>
                       </span>
                     </span>
-                    <span className="badge badge-accent" style={{ fontSize: "0.62rem", flexShrink: 0 }}><span className="dot dot-live" /> Always on</span>
+                    {!notifSupported ? (
+                      <span className="badge badge-muted" style={{ fontSize: "0.62rem", flexShrink: 0 }}><span className="dot" /> Not supported here</span>
+                    ) : notifPermission === "denied" ? (
+                      <span className="badge badge-muted" style={{ fontSize: "0.62rem", flexShrink: 0 }}><span className="dot" /> Notifications blocked</span>
+                    ) : notifEnabled ? (
+                      <span className="badge badge-accent" style={{ fontSize: "0.62rem", flexShrink: 0 }}><span className="dot dot-live" /> Notifications on</span>
+                    ) : (
+                      <span className="badge badge-muted" style={{ fontSize: "0.62rem", flexShrink: 0 }}><span className="dot" /> Notifications off</span>
+                    )}
                   </div>
                   <button
                     type="button"
-                    onClick={handleEnableNotifications}
-                    disabled={notifEnabling || notifPermission === "denied"}
+                    onClick={handleToggleNotifications}
+                    disabled={notifWorking || !notifSupported || notifPermission === "denied"}
                     className="row between"
                     style={{
                       width: "100%", marginTop: 10, padding: "10px 12px", borderRadius: "var(--r-sm)",
-                      border: `1px solid ${notifPermission === "granted" ? "var(--accent-line)" : "var(--line-2)"}`,
-                      background: notifPermission === "granted" ? "var(--accent-soft)" : "var(--surface)",
-                      cursor: notifPermission === "denied" ? "not-allowed" : "pointer",
+                      border: `1px solid ${notifEnabled ? "var(--accent-line)" : "var(--line-2)"}`,
+                      background: notifEnabled ? "var(--accent-soft)" : "var(--surface)",
+                      cursor: !notifSupported || notifPermission === "denied" ? "not-allowed" : "pointer",
                     }}
                   >
                     <span style={{ fontSize: "0.78rem" }}>
-                      {notifPermission === "granted"
-                        ? "🔔 Notify me on new briefings"
+                      {!notifSupported
+                        ? "🔕 Not supported in this browser"
                         : notifPermission === "denied"
                         ? "🔕 Notifications blocked — check your browser/system settings"
-                        : notifEnabling
-                        ? "Enabling…"
                         : "🔔 Notify me on new briefings"}
                     </span>
-                    {notifPermission !== "denied" && <span className="toggle" data-on={notifPermission === "granted"} />}
+                    {notifSupported && notifPermission !== "denied" && <span className="toggle" data-on={notifEnabled} />}
                   </button>
+                  {notifError && <div style={{ fontSize: "0.72rem", color: "var(--danger)", marginTop: 8 }}>{notifError}</div>}
                 </div>
               </div>
 
