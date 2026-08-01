@@ -48,7 +48,25 @@ export default function Delivery() {
   const [waTestSent, setWaTestSent] = useState(false);
   const [waError, setWaError] = useState<string | null>(null);
 
-  const { permission: notifPermission, enabled: notifEnabled, loading: notifLoading, working: notifWorking, supported: notifSupported, error: notifError, toggle: handleToggleNotifications } = useNotificationToggle();
+
+  const {
+    permission: notifPermission,
+    enabled: notifEnabled,
+    loading: notifLoading,
+    working: notifWorking,
+    supported: notifSupported,
+    error: notifError,
+    osBlocked: notifOsBlocked,
+    osSettingsOpened: notifOsSettingsOpened,
+    os: notifOs,
+    toggle: handleToggleNotifications,
+    recheckOs: recheckNotifOs,
+  } = useNotificationToggle();
+
+  const [inappTesting, setInappTesting] = useState(false);
+  const [inappTestSent, setInappTestSent] = useState(false);
+  const [inappTestError, setInappTestError] = useState<string | null>(null);
+  const [inappToast, setInappToast] = useState(false); // in-page toast, always works
 
   useEffect(() => { if (status === "unauthenticated") router.replace("/signin"); }, [status, router]);
 
@@ -115,6 +133,140 @@ export default function Delivery() {
     } catch { setTgError("Network error — try again."); } finally { setTgTesting(false); }
   };
 
+  const handleInappTest = async () => {
+    if (inappTesting) return;
+    setInappTesting(true);
+    setInappTestError(null);
+    setInappTestSent(false);
+
+    try {
+      // ── Step 1: Force-register & update the service worker ────────────────
+      let swReg: ServiceWorkerRegistration | undefined;
+      try {
+        swReg = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+        await swReg.update();
+        const waiting = swReg.waiting;
+        if (waiting) {
+          waiting.postMessage({ type: "SKIP_WAITING" });
+          await new Promise((r) => setTimeout(r, 500));
+        }
+        await Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(r, 3000))]);
+        swReg = await navigator.serviceWorker.ready;
+      } catch (swErr) {
+        console.warn("[inapp-test] SW registration/update failed:", swErr);
+      }
+
+      // ── Step 2: Generate a voice note sample and get a token ──────────────
+      // The token is embedded in the notification's click_action so when the
+      // user taps it they land on /test-briefing?token=... with the audio ready.
+      let voiceToken: string | null = null;
+      try {
+        const vRes = await fetch("/api/inapp-test-voice", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ language: "English", tone: "Analytical" }),
+        });
+        if (vRes.ok) {
+          const vData = await vRes.json();
+          voiceToken = vData.token ?? null;
+        } else {
+          console.warn("[inapp-test] voice generation failed, sending notification without audio");
+        }
+      } catch (vErr) {
+        console.warn("[inapp-test] voice generation error:", vErr);
+      }
+
+      // The notification tap target takes the user directly to /test-briefing
+      // where the voice briefing plays automatically.
+      const clickUrl = "/test-briefing";
+
+      // ── Step 3: Get the live FCM token for this device ────────────────────
+      let deviceToken: string | null = null;
+      try {
+        const { initializeApp, getApps } = await import("firebase/app");
+        const { getMessaging, getToken, onMessage } = await import("firebase/messaging");
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyBNQLvjSILYGK7kkVfm9iO0_-bVUaTsVlw",
+          authDomain: "leora-03.firebaseapp.com",
+          projectId: "leora-03",
+          storageBucket: "leora-03.firebasestorage.app",
+          messagingSenderId: "1026194582181",
+          appId: "1:1026194582181:web:5e757ab8cd8e92cac4fb4c",
+        };
+        const VAPID_KEY = "BGbXh0nISWKL4N7Qs89NAtkYBS4UDkESQIol5CGsFiGFruZ6os362GPI3s6qSPBDdl98wYTuBHNIEGMUnmVSUnU";
+
+        const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
+        const messaging = getMessaging(app);
+
+        onMessage(messaging, async (payload) => {
+          const title = payload.notification?.title ?? "Leora";
+          const body  = payload.notification?.body  ?? "New briefing ready.";
+          try {
+            const sw = await navigator.serviceWorker.ready;
+            await sw.showNotification(title, {
+              body, icon: "/icon.svg", badge: "/icon.svg",
+              data: (payload.data as Record<string, string>) ?? {},
+            });
+          } catch {
+            if (Notification.permission === "granted") new Notification(title, { body });
+          }
+        });
+
+        deviceToken = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
+        if (deviceToken) {
+          await fetch("/api/push-subscriptions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: deviceToken, platform: "web" }),
+          }).catch(() => { /* non-blocking */ });
+        }
+      } catch (tokenErr) {
+        console.warn("[inapp-test] could not get live FCM token:", tokenErr);
+      }
+
+      // ── Step 4: Send via the Admin SDK API (includes voice click_action) ───
+      const res = await fetch("/api/inapp-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(deviceToken ? { token: deviceToken } : {}),
+          clickUrl,
+        }),
+      });
+
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        setInappTestError(e.error ?? "Test failed.");
+        return;
+      }
+
+      setInappTestSent(true);
+      setTimeout(() => setInappTestSent(false), 5000);
+      setInappToast(true);
+      setTimeout(() => setInappToast(false), 6000);
+
+      // ── Step 5: Immediate local SW notification with voice click URL ───────
+      try {
+        const sw = await navigator.serviceWorker.ready;
+        await sw.showNotification("🎧 Test briefing ready", {
+          body: "Your Leora voice note is ready — tap to listen.",
+          icon: "/icon.svg",
+          badge: "/icon.svg",
+          tag: "leora-test",
+          data: { click_action: clickUrl },
+        });
+      } catch (notifErr) {
+        console.warn("[inapp-test] direct SW notification failed:", notifErr);
+      }
+    } catch {
+      setInappTestError("Network error — try again.");
+    } finally {
+      setInappTesting(false);
+    }
+
+  };
+
   const handleWaConnect = async () => {
     setWaError(null); setWaConnecting(true);
     try {
@@ -143,6 +295,67 @@ export default function Delivery() {
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <AppNav />
+
+      {/* ── In-page toast overlay ── shows regardless of OS notification settings */}
+      {inappToast && (
+        <div
+          onClick={() => router.push("/test-briefing")}
+          style={{
+            position: "fixed", top: 20, right: 20, zIndex: 9999,
+            width: 340, maxWidth: "calc(100vw - 40px)",
+            background: "var(--surface, #fff)",
+            border: "1px solid rgba(77,127,255,0.5)",
+            borderRadius: 16,
+            boxShadow: "0 8px 40px rgba(0,0,0,0.18), 0 0 0 1px rgba(77,127,255,0.15)",
+            overflow: "hidden",
+            cursor: "pointer",
+            animation: "slideInRight 0.4s cubic-bezier(0.16,1,0.3,1) both",
+          }}
+        >
+          {/* Blue top bar */}
+          <div style={{ height: 3, background: "linear-gradient(90deg, #4d7fff, #8b5cf6)", width: "100%" }} />
+          <div style={{ padding: "16px 18px", display: "flex", gap: 13, alignItems: "flex-start" }}>
+            {/* Headphone icon */}
+            <div style={{
+              width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+              background: "linear-gradient(135deg, rgba(77,127,255,0.15), rgba(139,92,246,0.1))",
+              border: "1px solid rgba(77,127,255,0.3)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 20,
+              position: "relative",
+            }}>
+              🎧
+              <span style={{
+                position: "absolute", top: -3, right: -3,
+                width: 10, height: 10, borderRadius: "50%",
+                background: "#4d7fff",
+                boxShadow: "0 0 0 2px var(--surface, #fff)",
+                animation: "pulse 1.5s ease-in-out infinite",
+              }} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: "0.88rem", fontWeight: 700, marginBottom: 3, color: "var(--ink, #111)" }}>
+                🎧 Test briefing ready
+              </div>
+              <div style={{ fontSize: "0.78rem", color: "var(--ink-3, #666)", lineHeight: 1.5 }}>
+                Your Leora voice note is ready — tap to listen.
+              </div>
+              <div style={{ fontSize: "0.72rem", color: "#4d7fff", fontWeight: 600, marginTop: 6 }}>
+                Tap to play voice note →
+              </div>
+            </div>
+          </div>
+          {/* OS hint */}
+          <div style={{
+            padding: "10px 18px 14px",
+            borderTop: "1px solid var(--line, #eee)",
+            fontSize: "0.72rem", color: "var(--ink-4, #999)", lineHeight: 1.5,
+          }}>
+            💡 If no system pop-up appeared: check <strong>Windows → Settings → Notifications → Chrome</strong> is on, and <strong>Focus Assist</strong> is off.
+          </div>
+        </div>
+      )}
+
       <main className="container" style={{ padding: "40px 24px 88px", maxWidth: 1000 }}>
         {/* Header */}
         <div className="rise" style={{ marginBottom: 36 }}>
@@ -206,6 +419,93 @@ export default function Delivery() {
                 {!notifLoading && notifSupported && notifPermission !== "denied" && <span className="toggle" data-on={notifEnabled} />}
               </button>
               {notifError && <div style={{ fontSize: "0.76rem", color: "var(--danger)", marginTop: 8 }}>{notifError}</div>}
+
+              {/* OS-level permission blocked banner ── shown when browser says granted
+                  but the OS probe detected the system is swallowing notifications */}
+              {notifEnabled && notifOsBlocked && (
+                <div style={{
+                  marginTop: 12, borderRadius: 12, overflow: "hidden",
+                  border: "1px solid rgba(251,146,60,0.4)",
+                  background: "rgba(251,146,60,0.06)",
+                  animation: "riseSm 0.25s var(--ease) both",
+                }}>
+                  <div style={{ padding: "12px 14px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                      <span style={{ fontSize: 15 }}>⚠️</span>
+                      <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--ink)" }}>
+                        System notifications are blocked
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.76rem", color: "var(--ink-3)", lineHeight: 1.6, marginBottom: 10 }}>
+                      {notifOs === "windows"
+                        ? <>Your browser permission is granted, but <strong>Windows</strong> is blocking Chrome from showing notifications. We'll open <strong>Windows Settings → Notifications</strong> for you — just turn on <strong>Google Chrome</strong>.</>
+                        : notifOs === "mac"
+                        ? <>macOS is blocking Chrome. We'll open <strong>System Settings → Notifications → Google Chrome</strong> — set it to <strong>Banners</strong> or <strong>Alerts</strong>.</>
+                        : notifOs === "android"
+                        ? <>Android is blocking notifications for this app. We'll open <strong>App Settings</strong> — enable notifications there.</>
+                        : <>Your OS is blocking notifications. Click below to open the system notification settings.</>}
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        style={{ background: "#f97316", color: "#fff", border: "none", fontWeight: 700, fontSize: "0.78rem" }}
+                        onClick={async () => {
+                          const { openOsNotificationSettings } = await import("@/lib/push");
+                          await openOsNotificationSettings();
+                        }}
+                      >
+                        {notifOs === "windows"
+                          ? "Open Windows Notification Settings →"
+                          : notifOs === "mac"
+                          ? "Open System Settings →"
+                          : notifOs === "android"
+                          ? "Open App Settings →"
+                          : "Open System Settings →"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-secondary"
+                        style={{ fontSize: "0.78rem" }}
+                        onClick={recheckNotifOs}
+                      >
+                        ✓ Done — verify
+                      </button>
+                    </div>
+                  </div>
+                  {notifOsSettingsOpened && (
+                    <div style={{
+                      padding: "8px 14px", borderTop: "1px solid rgba(251,146,60,0.25)",
+                      fontSize: "0.72rem", color: "var(--ink-4)", background: "rgba(251,146,60,0.04)",
+                    }}>
+                      Settings page opened — enable Chrome notifications there, then click "Done — verify" above.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Send test notification — shown only when notifications are enabled */}
+              {notifEnabled && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
+                  <button
+                    id="btn-inapp-test-notification"
+                    type="button"
+                    onClick={handleInappTest}
+                    disabled={inappTesting}
+                    className={`btn ${inappTestSent ? "btn-accent" : "btn-secondary"}`}
+                    style={{ width: "100%" }}
+                  >
+                    {inappTestSent
+                      ? "✓ Notification sent — check your device!"
+                      : inappTesting
+                      ? <><span className="spinner" style={{ width: 15, height: 15 }} /> Sending…</>
+                      : "🔔 Send test notification"}
+                  </button>
+                  {inappTestError && (
+                    <div style={{ fontSize: "0.76rem", color: "var(--danger)", marginTop: 8 }}>{inappTestError}</div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Telegram */}
@@ -385,6 +685,10 @@ export default function Delivery() {
       <style>{`
         .deliver-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 20px; align-items: start; }
         @media (max-width: 860px) { .deliver-grid { grid-template-columns: 1fr; } }
+        @keyframes slideInRight {
+          from { opacity: 0; transform: translateX(60px) scale(0.96); }
+          to   { opacity: 1; transform: translateX(0)     scale(1); }
+        }
       `}</style>
     </div>
   );
