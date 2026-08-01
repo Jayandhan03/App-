@@ -70,7 +70,13 @@ export default function TestBriefingPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/signin");
-    if (typeof window !== "undefined" && !("speechSynthesis" in window)) {
+    // Some Android WebViews report `"speechSynthesis" in window` as true but
+    // don't actually expose a working SpeechSynthesisUtterance constructor —
+    // check both, and treat unsupported as a normal state, not a crash.
+    if (
+      typeof window !== "undefined" &&
+      (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined")
+    ) {
       setSupported(false);
     }
   }, [status, router]);
@@ -129,26 +135,43 @@ export default function TestBriefingPage() {
     return u;
   }, [tick, totalDuration]);
 
+  // Some mobile browsers/WebViews report full Web Speech API support but
+  // throw (or silently no-op) when actually asked to build/speak an
+  // utterance. Never let that surface as an uncaught render-time crash —
+  // fall back to the "unsupported" state instead.
+  const speakSample = useCallback(() => {
+    try {
+      if (speechSynthesis.speaking) speechSynthesis.cancel();
+      const u = buildUtterance();
+      speechSynthesis.speak(u);
+    } catch (err) {
+      console.warn("[test-briefing] speech synthesis failed:", err);
+      setSupported(false);
+      setPlaying(false);
+    }
+  }, [buildUtterance]);
+
   // Auto-play on mount (simulates opening from a notification tap).
   useEffect(() => {
     if (status !== "authenticated" || !supported) return;
 
-    // Voices may load async.
-    const tryPlay = () => {
-      if (speechSynthesis.speaking) speechSynthesis.cancel();
-      const u = buildUtterance();
-      speechSynthesis.speak(u);
-    };
-
-    const voices = speechSynthesis.getVoices();
-    if (voices.length > 0) {
-      tryPlay();
-    } else {
-      speechSynthesis.addEventListener("voiceschanged", tryPlay, { once: true });
+    try {
+      // Voices may load async.
+      const voices = speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        speakSample();
+      } else {
+        speechSynthesis.addEventListener("voiceschanged", speakSample, { once: true });
+      }
+    } catch (err) {
+      console.warn("[test-briefing] speech synthesis unavailable:", err);
+      setSupported(false);
     }
 
     return () => {
-      speechSynthesis.cancel();
+      try {
+        speechSynthesis.cancel();
+      } catch { /* already unsupported/torn down */ }
       stopTicking();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -156,21 +179,26 @@ export default function TestBriefingPage() {
 
   function togglePlay() {
     if (!supported) return;
-    if (speechSynthesis.speaking && !speechSynthesis.paused) {
-      speechSynthesis.pause();
-      stopTicking();
+    try {
+      if (speechSynthesis.speaking && !speechSynthesis.paused) {
+        speechSynthesis.pause();
+        stopTicking();
+        setPlaying(false);
+      } else if (speechSynthesis.paused) {
+        speechSynthesis.resume();
+        startTimeRef.current = Date.now() - elapsed * 1000;
+        rafRef.current = requestAnimationFrame(tick);
+        setPlaying(true);
+      } else {
+        // Restart.
+        setElapsed(0);
+        setEnded(false);
+        speakSample();
+      }
+    } catch (err) {
+      console.warn("[test-briefing] speech synthesis failed:", err);
+      setSupported(false);
       setPlaying(false);
-    } else if (speechSynthesis.paused) {
-      speechSynthesis.resume();
-      startTimeRef.current = Date.now() - elapsed * 1000;
-      rafRef.current = requestAnimationFrame(tick);
-      setPlaying(true);
-    } else {
-      // Restart.
-      setElapsed(0);
-      setEnded(false);
-      const u = buildUtterance();
-      speechSynthesis.speak(u);
     }
   }
 
@@ -179,11 +207,12 @@ export default function TestBriefingPage() {
     const ratio = (e.clientX - rect.left) / rect.width;
     // SpeechSynthesis doesn't support true seeking — restart if clicking past half.
     if (ratio < 0.05) {
-      speechSynthesis.cancel();
+      try {
+        speechSynthesis.cancel();
+      } catch { /* ignore */ }
       setElapsed(0);
       setEnded(false);
-      const u = buildUtterance();
-      speechSynthesis.speak(u);
+      speakSample();
     }
   }
 
