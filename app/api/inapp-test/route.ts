@@ -78,7 +78,12 @@ export async function POST(req: NextRequest) {
     };
     const data = { click_action: clickUrl, type: "test" };
     const webpush = {
-      notification: { icon: "/icon-192.png", badge: "/icon-192.png", requireInteraction: false },
+      notification: {
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
+        requireInteraction: false,
+        actions: hasVoice ? [{ action: "play", title: "▶ Play" }] : undefined,
+      },
       fcmOptions: { link: clickUrl },
     };
     const android = {

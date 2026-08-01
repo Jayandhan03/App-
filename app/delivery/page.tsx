@@ -68,7 +68,6 @@ export default function Delivery() {
   const [inappTestSent, setInappTestSent] = useState(false);
   const [inappTestError, setInappTestError] = useState<string | null>(null);
   const [inappToast, setInappToast] = useState(false); // in-page toast, always works
-  const [lastVoiceToken, setLastVoiceToken] = useState<string | null>(null);
 
   useEffect(() => { if (status === "unauthenticated") router.replace("/signin"); }, [status, router]);
 
@@ -142,32 +141,10 @@ export default function Delivery() {
     setInappTestSent(false);
 
     try {
-      // ── Generate a voice note sample and get a token (both platforms) ──────
-      // The token is embedded in the notification's click_action so when the
-      // user taps it they land on /test-briefing?token=... with the audio ready.
-      let voiceToken: string | null = null;
-      try {
-        const vRes = await fetch("/api/inapp-test-voice", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ language: "English", tone: "Analytical" }),
-        });
-        if (vRes.ok) {
-          const vData = await vRes.json();
-          voiceToken = vData.token ?? null;
-        } else {
-          console.warn("[inapp-test] voice generation failed, sending notification without audio");
-        }
-      } catch (vErr) {
-        console.warn("[inapp-test] voice generation error:", vErr);
-      }
-
-      // The notification tap target takes the user directly to /test-briefing
-      // where the voice briefing plays automatically. Carry the token through
-      // so that page can fetch and play the real generated audio instead of
-      // falling back to an on-device text-to-speech reading.
-      setLastVoiceToken(voiceToken);
-      const clickUrl = voiceToken ? `/test-briefing?token=${voiceToken}` : "/test-briefing";
+      // The notification tap target takes the user directly to /test-briefing,
+      // which always plays the same pre-recorded sample clip
+      // (public/audio/test-briefing.mp3) — no TTS generation call needed.
+      const clickUrl = "/test-briefing";
 
       // ── Native app: none of the web-push machinery below applies ───────────
       // No browser service worker, no web FCM token, no Notification API —
@@ -233,12 +210,15 @@ export default function Delivery() {
         onMessage(messaging, async (payload) => {
           const title = payload.notification?.title ?? "Leora";
           const body  = payload.notification?.body  ?? "New briefing ready.";
+          const data = (payload.data as Record<string, string>) ?? {};
           try {
             const sw = await navigator.serviceWorker.ready;
-            await sw.showNotification(title, {
+            const options: NotificationOptions & { actions?: { action: string; title: string }[] } = {
               body, icon: "/icon-192.png", badge: "/icon-192.png",
-              data: (payload.data as Record<string, string>) ?? {},
-            });
+              data,
+              ...(data.click_action ? { actions: [{ action: "play", title: "▶ Play" }] } : {}),
+            };
+            await sw.showNotification(title, options);
           } catch {
             if (Notification.permission === "granted") new Notification(title, { body });
           }
@@ -284,13 +264,17 @@ export default function Delivery() {
       // honestly rather than showing a false "success".
       try {
         const sw = await navigator.serviceWorker.ready;
-        await sw.showNotification("🎧 Test briefing ready", {
+        // `actions` is part of the real Notifications API but missing from
+        // this TS lib's NotificationOptions — widen locally rather than `any`.
+        const options: NotificationOptions & { actions?: { action: string; title: string }[] } = {
           body: "Your Leora voice note is ready — tap to listen.",
           icon: "/icon-192.png",
           badge: "/icon-192.png",
           tag: "leora-test",
           data: { click_action: clickUrl },
-        });
+          actions: [{ action: "play", title: "▶ Play" }],
+        };
+        await sw.showNotification("🎧 Test briefing ready", options);
         // showNotification() resolving only means Chrome accepted the call —
         // it does NOT guarantee Android actually rendered it in the shade
         // (that's an OS-level decision JS has no visibility into). Confirm
@@ -351,7 +335,7 @@ export default function Delivery() {
       {/* ── In-page toast overlay ── shows regardless of OS notification settings */}
       {inappToast && (
         <div
-          onClick={() => router.push(lastVoiceToken ? `/test-briefing?token=${lastVoiceToken}` : "/test-briefing")}
+          onClick={() => router.push("/test-briefing")}
           style={{
             position: "fixed", top: 20, right: 20, zIndex: 9999,
             width: 340, maxWidth: "calc(100vw - 40px)",

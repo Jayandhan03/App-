@@ -222,14 +222,17 @@ async function enableWebPush(): Promise<boolean> {
   onMessage(messaging, async (payload) => {
     const title = payload.notification?.title ?? "Leora";
     const body = payload.notification?.body ?? "New briefing ready.";
+    const data = (payload.data as Record<string, string>) ?? {};
     try {
       const sw = await navigator.serviceWorker.ready;
-      await sw.showNotification(title, {
+      const options: NotificationOptions & { actions?: { action: string; title: string }[] } = {
         body,
         icon: "/icon-192.png",
         badge: "/icon-192.png",
-        data: (payload.data as Record<string, string>) ?? {},
-      });
+        data,
+        ...(data.click_action ? { actions: [{ action: "play", title: "▶ Play" }] } : {}),
+      };
+      await sw.showNotification(title, options);
     } catch {
       if (Notification.permission === "granted")
         new Notification(title, { body, icon: "/icon-192.png" });

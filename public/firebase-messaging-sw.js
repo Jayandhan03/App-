@@ -58,14 +58,19 @@ self.addEventListener("message", (event) => {
 messaging.onBackgroundMessage((payload) => {
   const title = payload.notification?.title ?? "Leora";
   const body  = payload.notification?.body  ?? "New briefing ready.";
+  const data = payload.data ?? {};
   self.registration.showNotification(title, {
     body,
     icon: "/icon-192.png",
     badge: "/icon-192.png",
-    data: payload.data ?? {},
+    data,
+    ...(data.click_action ? { actions: [{ action: "play", title: "▶ Play" }] } : {}),
   });
 });
 
+// Tapping the notification body or the "▶ Play" action both land on the
+// same click_action URL — /test-briefing auto-plays the sample on load
+// either way, since a Service Worker can't play audio itself.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const url = event.notification.data?.click_action || "/dashboard";

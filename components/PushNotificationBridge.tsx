@@ -18,6 +18,14 @@ export default function PushNotificationBridge() {
       const { PushNotifications } = await import("@capacitor/push-notifications");
       const { LocalNotifications } = await import("@capacitor/local-notifications");
 
+      // A "▶ Play" action button on voice-note notifications, alongside the
+      // default tap-to-open. Both route to the same click_action — a
+      // notification can't play audio itself, native or web, so tapping
+      // either one opens the app straight into auto-playing the clip.
+      await LocalNotifications.registerActionTypes({
+        types: [{ id: "VOICE_NOTE", actions: [{ id: "play", title: "▶ Play" }] }],
+      }).catch(() => { /* older OS versions may not support custom action types */ });
+
       // Tapped a push notification (delivered while backgrounded — Android
       // shows those automatically) → route to wherever its payload says to
       // go (see data.click_action in push_service.py), same as the web
@@ -36,6 +44,7 @@ export default function PushNotificationBridge() {
       const pushReceived = await PushNotifications.addListener("pushNotificationReceived", async (notification) => {
         try {
           await LocalNotifications.requestPermissions();
+          const clickAction = notification.data?.click_action as string | undefined;
           await LocalNotifications.schedule({
             notifications: [
               {
@@ -43,6 +52,7 @@ export default function PushNotificationBridge() {
                 title: notification.title ?? "Leora",
                 body: notification.body ?? "New briefing ready.",
                 extra: notification.data ?? {},
+                ...(clickAction ? { actionTypeId: "VOICE_NOTE" } : {}),
               },
             ],
           });

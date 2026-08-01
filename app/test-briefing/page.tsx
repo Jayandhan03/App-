@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import AppNav from "@/components/AppNav";
 
@@ -11,7 +11,9 @@ const SAMPLE_TEXT =
   "When your agents run, their audio briefings will be delivered right here — " +
   "just like this. Tap play and stay informed, hands-free.";
 
-const SAMPLE_DURATION_APPROX = 14; // seconds (varies by voice)
+// One pre-recorded clip, generated once and committed to the repo — not
+// regenerated via TTS on every test. See public/audio/test-briefing.mp3.
+const AUDIO_SRC = "/audio/test-briefing.mp3";
 
 // ── Animated waveform ─────────────────────────────────────────────────────────
 const BARS = [6, 14, 20, 11, 18, 24, 9, 16, 22, 8, 19, 13, 21, 7, 17, 23, 10, 15, 20, 6, 18, 12];
@@ -55,259 +57,53 @@ function fmt(s: number): string {
 }
 
 export default function TestBriefingPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="row center" style={{ minHeight: "100vh" }}>
-          <span className="spinner" />
-        </div>
-      }
-    >
-      <TestBriefingInner />
-    </Suspense>
-  );
-}
-
-function TestBriefingInner() {
   const { status } = useSession();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const token = searchParams.get("token");
 
-  const utterRef = useRef<SpeechSynthesisUtterance | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const startTimeRef = useRef<number>(0);
-  const rafRef = useRef<number>(0);
 
-  const [supported, setSupported] = useState(true);
   const [playing, setPlaying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [totalDuration, setTotalDuration] = useState(SAMPLE_DURATION_APPROX);
+  const [totalDuration, setTotalDuration] = useState(0);
   const [ended, setEnded] = useState(false);
-
-  // Real generated audio (fetched by token). When this is set, playback is
-  // driven by the <audio> element instead of on-device speech synthesis.
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [audioLoading, setAudioLoading] = useState(Boolean(token));
-  const [audioNote, setAudioNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/signin");
-    // Some Android WebViews report `"speechSynthesis" in window` as true but
-    // don't actually expose a working SpeechSynthesisUtterance constructor —
-    // check both, and treat unsupported as a normal state, not a crash.
-    if (
-      typeof window !== "undefined" &&
-      (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined")
-    ) {
-      setSupported(false);
-    }
   }, [status, router]);
 
-  // Fetch the real generated voice note for this token, if we have one.
-  // Falls back to on-device speech synthesis (below) if it's missing,
-  // expired, or fails to load.
+  // Try to auto-play on load (simulates opening from a notification tap).
+  // Browsers/WebViews may block autoplay across a full page navigation —
+  // that's fine, the user just taps play manually in that case.
   useEffect(() => {
-    if (!token || status !== "authenticated") return;
-    let cancelled = false;
-    let objectUrl: string | null = null;
-
-    (async () => {
-      try {
-        const res = await fetch(`/api/inapp-test-voice?token=${encodeURIComponent(token)}`);
-        if (!res.ok) {
-          const e = await res.json().catch(() => ({}));
-          if (!cancelled) setAudioNote(e.error ?? "Generated audio expired — playing the demo voice instead.");
-          return;
-        }
-        const blob = await res.blob();
-        if (cancelled) return;
-        objectUrl = URL.createObjectURL(blob);
-        setAudioUrl(objectUrl);
-      } catch (err) {
-        console.warn("[test-briefing] audio fetch failed:", err);
-        if (!cancelled) setAudioNote("Couldn't load the generated audio — playing the demo voice instead.");
-      } finally {
-        if (!cancelled) setAudioLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [token, status]);
-
-  // Try to auto-play the real audio once it's loaded (simulates opening from
-  // a notification tap). Browsers may block autoplay across a full page
-  // navigation — that's fine, the user just taps play manually.
-  useEffect(() => {
-    if (!audioUrl) return;
+    if (status !== "authenticated") return;
     audioRef.current?.play().catch(() => { /* autoplay blocked — wait for tap */ });
-  }, [audioUrl]);
-
-  // Keep elapsed time ticking while speaking (speech-synthesis mode only —
-  // audio mode gets timing straight from the <audio> element's events).
-  const tick = useCallback(() => {
-    const dt = (Date.now() - startTimeRef.current) / 1000;
-    setElapsed(Math.min(dt, totalDuration));
-    rafRef.current = requestAnimationFrame(tick);
-  }, [totalDuration]);
-
-  const stopTicking = () => cancelAnimationFrame(rafRef.current);
-
-  const buildUtterance = useCallback(() => {
-    const u = new SpeechSynthesisUtterance(SAMPLE_TEXT);
-    u.lang = "en-US";
-    u.rate = 0.92;
-    u.pitch = 1.05;
-
-    // Pick the first English female-ish voice if available.
-    const voices = speechSynthesis.getVoices();
-    const preferred = voices.find(
-      (v) =>
-        v.lang.startsWith("en") &&
-        (v.name.toLowerCase().includes("female") ||
-          v.name.toLowerCase().includes("zira") ||
-          v.name.toLowerCase().includes("samantha") ||
-          v.name.toLowerCase().includes("google us english"))
-    ) ?? voices.find((v) => v.lang.startsWith("en"));
-    if (preferred) u.voice = preferred;
-
-    u.onstart = () => {
-      startTimeRef.current = Date.now();
-      setPlaying(true);
-      setEnded(false);
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    u.onend = () => {
-      stopTicking();
-      setElapsed(totalDuration);
-      setPlaying(false);
-      setEnded(true);
-    };
-    u.onerror = () => {
-      stopTicking();
-      setPlaying(false);
-    };
-    u.onboundary = (ev) => {
-      if (ev.name === "word") {
-        const ratio = ev.charIndex / SAMPLE_TEXT.length;
-        setTotalDuration(Math.max(SAMPLE_DURATION_APPROX, (Date.now() - startTimeRef.current) / 1000 / ratio));
-      }
-    };
-
-    utterRef.current = u;
-    return u;
-  }, [tick, totalDuration]);
-
-  // Some mobile browsers/WebViews report full Web Speech API support but
-  // throw (or silently no-op) when actually asked to build/speak an
-  // utterance. Never let that surface as an uncaught render-time crash —
-  // fall back to the "unsupported" state instead.
-  const speakSample = useCallback(() => {
-    try {
-      if (speechSynthesis.speaking) speechSynthesis.cancel();
-      const u = buildUtterance();
-      speechSynthesis.speak(u);
-    } catch (err) {
-      console.warn("[test-briefing] speech synthesis failed:", err);
-      setSupported(false);
-      setPlaying(false);
-    }
-  }, [buildUtterance]);
-
-  // Auto-play on mount via speech synthesis — only once we know there's no
-  // real generated audio to use instead (no token, expired, or failed).
-  useEffect(() => {
-    if (status !== "authenticated" || !supported) return;
-    if (audioLoading || audioUrl) return;
-
-    try {
-      // Voices may load async.
-      const voices = speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        speakSample();
-      } else {
-        speechSynthesis.addEventListener("voiceschanged", speakSample, { once: true });
-      }
-    } catch (err) {
-      console.warn("[test-briefing] speech synthesis unavailable:", err);
-      setSupported(false);
-    }
-
-    return () => {
-      try {
-        speechSynthesis.cancel();
-      } catch { /* already unsupported/torn down */ }
-      stopTicking();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, supported, audioLoading, audioUrl]);
+  }, [status]);
 
   function togglePlay() {
-    if (audioUrl) {
-      const el = audioRef.current;
-      if (!el) return;
-      if (el.paused) {
-        setEnded(false);
-        el.play().catch((err) => console.warn("[test-briefing] audio play failed:", err));
-      } else {
-        el.pause();
-      }
-      return;
-    }
-
-    if (!supported) return;
-    try {
-      if (speechSynthesis.speaking && !speechSynthesis.paused) {
-        speechSynthesis.pause();
-        stopTicking();
-        setPlaying(false);
-      } else if (speechSynthesis.paused) {
-        speechSynthesis.resume();
-        startTimeRef.current = Date.now() - elapsed * 1000;
-        rafRef.current = requestAnimationFrame(tick);
-        setPlaying(true);
-      } else {
-        // Restart.
-        setElapsed(0);
-        setEnded(false);
-        speakSample();
-      }
-    } catch (err) {
-      console.warn("[test-briefing] speech synthesis failed:", err);
-      setSupported(false);
-      setPlaying(false);
+    const el = audioRef.current;
+    if (!el) return;
+    if (el.paused) {
+      setEnded(false);
+      el.play().catch((err) => {
+        console.warn("[test-briefing] audio play failed:", err);
+        setError("Couldn't play the voice note — try again.");
+      });
+    } else {
+      el.pause();
     }
   }
 
   function handleSeekClick(e: React.MouseEvent<HTMLDivElement>) {
+    const el = audioRef.current;
+    if (!el || !isFinite(el.duration)) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const ratio = (e.clientX - rect.left) / rect.width;
-
-    if (audioUrl) {
-      const el = audioRef.current;
-      if (el && isFinite(el.duration)) {
-        el.currentTime = ratio * el.duration;
-        setEnded(false);
-      }
-      return;
-    }
-
-    // SpeechSynthesis doesn't support true seeking — restart if clicking past half.
-    if (ratio < 0.05) {
-      try {
-        speechSynthesis.cancel();
-      } catch { /* ignore */ }
-      setElapsed(0);
-      setEnded(false);
-      speakSample();
-    }
+    el.currentTime = ratio * el.duration;
+    setEnded(false);
   }
 
   const progress = totalDuration > 0 ? Math.min(elapsed / totalDuration, 1) : 0;
-  const playerReady = Boolean(audioUrl) || supported;
 
   if (status === "loading" || status === "unauthenticated") {
     return (
@@ -321,25 +117,20 @@ function TestBriefingInner() {
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <AppNav />
 
-      {audioUrl && (
-        <audio
-          ref={audioRef}
-          src={audioUrl}
-          preload="auto"
-          style={{ display: "none" }}
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
-          onEnded={() => { setPlaying(false); setEnded(true); }}
-          onTimeUpdate={(e) => setElapsed(e.currentTarget.currentTime)}
-          onLoadedMetadata={(e) => {
-            if (isFinite(e.currentTarget.duration)) setTotalDuration(e.currentTarget.duration);
-          }}
-          onError={() => {
-            setAudioNote("Couldn't play the generated audio — playing the demo voice instead.");
-            setAudioUrl(null);
-          }}
-        />
-      )}
+      <audio
+        ref={audioRef}
+        src={AUDIO_SRC}
+        preload="auto"
+        style={{ display: "none" }}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => { setPlaying(false); setEnded(true); }}
+        onTimeUpdate={(e) => setElapsed(e.currentTarget.currentTime)}
+        onLoadedMetadata={(e) => {
+          if (isFinite(e.currentTarget.duration)) setTotalDuration(e.currentTarget.duration);
+        }}
+        onError={() => setError("Couldn't load the voice note — check your connection and try again.")}
+      />
 
       <main
         style={{
@@ -502,12 +293,7 @@ function TestBriefingInner() {
           </div>
 
           {/* ── Audio player ── */}
-          {audioLoading ? (
-            <div className="row center" style={{ padding: "24px 0", gap: 10 }}>
-              <span className="spinner" />
-              <span style={{ fontSize: "0.82rem", color: "var(--ink-3)" }}>Loading your voice note…</span>
-            </div>
-          ) : !playerReady ? (
+          {error ? (
             <div
               style={{
                 padding: "18px",
@@ -519,7 +305,7 @@ function TestBriefingInner() {
                 color: "#ef4444",
               }}
             >
-              Speech synthesis isn&apos;t available in this browser. Try Chrome or Edge.
+              {error}
             </div>
           ) : (
             <div
@@ -652,19 +438,6 @@ function TestBriefingInner() {
               ? "Playing…"
               : "Tap play to hear your sample briefing"}
           </div>
-
-          {audioNote && !audioUrl && (
-            <div
-              style={{
-                textAlign: "center",
-                marginTop: 4,
-                fontSize: "0.7rem",
-                color: "rgba(160,175,220,0.45)",
-              }}
-            >
-              {audioNote}
-            </div>
-          )}
 
           {/* Footer buttons */}
           <div
