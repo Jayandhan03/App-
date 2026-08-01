@@ -17,6 +17,16 @@ export default function PushNotificationBridge() {
     (async () => {
       const { PushNotifications } = await import("@capacitor/push-notifications");
       const { LocalNotifications } = await import("@capacitor/local-notifications");
+      const { registerPlugin } = await import("@capacitor/core");
+
+      // Native plugin (VoiceNotePlugin.java in the Leora-mobile Android
+      // project) — owns a real MediaPlayer + MediaSession + MediaStyle
+      // notification, so a voice-note push gets an actual play/pause/seek
+      // bar in the shade, playable without opening the app. Falls back to a
+      // plain local notification below for anything without a playable URL.
+      const VoiceNotePlayer = registerPlugin<{
+        play(opts: { url: string; title: string; body: string }): Promise<void>;
+      }>("VoiceNotePlayer");
 
       // A "▶ Play" action button on voice-note notifications, alongside the
       // default tap-to-open. Both route to the same click_action — a
@@ -38,10 +48,27 @@ export default function PushNotificationBridge() {
 
       // Android does NOT auto-display a system notification for pushes that
       // arrive while the app is in the foreground — that's standard FCM
-      // behavior, not a bug. Post one ourselves via local-notifications so a
-      // real entry still lands in the notification shade instead of the
-      // push silently vanishing into nothing while the app is open.
+      // behavior, not a bug. Post one ourselves so a real entry still lands
+      // in the shade instead of the push silently vanishing while open.
       const pushReceived = await PushNotifications.addListener("pushNotificationReceived", async (notification) => {
+        const audioUrl = notification.data?.audio_url as string | undefined;
+
+        // Voice note with a real, directly-playable clip → hand off to the
+        // native media player for an actual play/pause/seek notification.
+        if (audioUrl) {
+          try {
+            await VoiceNotePlayer.play({
+              url: audioUrl,
+              title: notification.title ?? "Leora",
+              body: notification.body ?? "New briefing ready.",
+            });
+            return;
+          } catch (err) {
+            console.warn("[push-bridge] native voice player failed, falling back:", err);
+            // fall through to the plain local notification below
+          }
+        }
+
         try {
           await LocalNotifications.requestPermissions();
           const clickAction = notification.data?.click_action as string | undefined;

@@ -76,7 +76,13 @@ export async function POST(req: NextRequest) {
         ? "Your Leora voice note is ready — tap to listen."
         : "Your in-app notifications are working. Briefings will arrive right here.",
     };
-    const data = { click_action: clickUrl, type: "test" };
+    const data = {
+      click_action: clickUrl,
+      type: "test",
+      // Absolute URL so the native player (which has no browser base URL to
+      // resolve a relative path against) can play it directly.
+      ...(hasVoice ? { audio_url: `${req.nextUrl.origin}/audio/test-briefing.mp3` } : {}),
+    };
     const webpush = {
       notification: {
         icon: "/icon-192.png",
