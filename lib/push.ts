@@ -334,22 +334,24 @@ export function useNotificationToggle(): NotificationToggleState {
       return;
     }
     (async () => {
-      const [perm, status] = await Promise.all([
-        checkPermission(),
-        fetch(`/api/push-subscriptions?platform=${platform}`)
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null),
-      ]);
-      setPermission(perm);
-      setEnabled(Boolean(status?.enabled));
+      try {
+        const [perm, status] = await Promise.all([
+          checkPermission().catch(() => "default" as NotifPermission),
+          fetch(`/api/push-subscriptions?platform=${platform}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null),
+        ]);
+        setPermission(perm);
+        setEnabled(Boolean(status?.enabled));
 
-      // If browser permission is already granted, probe OS delivery silently.
-      if (perm === "granted" && !isNativeApp()) {
-        const ok = await probeNotificationDelivery(2500);
-        setOsBlocked(!ok);
+        // If browser permission is already granted, probe OS delivery silently.
+        if (perm === "granted" && !isNativeApp()) {
+          const ok = await probeNotificationDelivery(2500);
+          setOsBlocked(!ok);
+        }
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     })();
   }, [platform, supported]);
 
