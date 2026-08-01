@@ -54,6 +54,23 @@ export type OsPermissionStatus =
   | "unsupported";    // API not available
 
 /**
+ * Best-effort guess at the Android package name of the browser we're running
+ * in, from the user agent string. Used to deep-link into that browser's own
+ * app-notification-settings page. Returns null for browsers we don't
+ * recognize (caller falls back to manual instructions).
+ */
+function androidBrowserPackage(): string | null {
+  if (typeof navigator === "undefined") return null;
+  const ua = navigator.userAgent;
+  if (/SamsungBrowser/i.test(ua)) return "com.sec.android.app.sbrowser";
+  if (/EdgA/i.test(ua)) return "com.microsoft.emmx";
+  if (/OPR|Opera/i.test(ua)) return "com.opera.browser";
+  if (/Firefox/i.test(ua)) return "org.mozilla.firefox";
+  if (/Chrome/i.test(ua)) return "com.android.chrome";
+  return null;
+}
+
+/**
  * Attempts to auto-open the correct OS notification settings page so the user
  * just has to click allow — no manual navigation required.
  * Returns true if an OS-settings page was opened.
@@ -86,6 +103,20 @@ export async function openOsNotificationSettings(): Promise<boolean> {
         window.open("app-settings:");
       }
       return true;
+    }
+    if (os === "android" && !isNativeApp()) {
+      // Regular mobile browser (not our wrapped app). There's no standard
+      // web API to open Android's per-app notification settings, but Chrome
+      // and most Chromium-based Android browsers will follow an
+      // ANDROID_SETTINGS.APPLICATION_DETAILS_SETTINGS intent:// URI for their
+      // own package. Best-effort only — some browsers/OS versions ignore it,
+      // in which case the caller's manual instructions are the fallback.
+      const pkg = androidBrowserPackage();
+      if (pkg) {
+        window.location.href = `intent:#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;data=package:${pkg};end`;
+        return true;
+      }
+      return false;
     }
     if (os === "mac") {
       // macOS doesn't allow web pages to open System Preferences directly.
@@ -153,7 +184,17 @@ async function enableWebPush(): Promise<boolean> {
 
   // ── 1. Request browser-level permission ────────────────────────────────────
   const permission = await Notification.requestPermission();
-  if (permission !== "granted") return false;
+  if (permission !== "granted") {
+    // On Android, this commonly resolves to "default" or "denied" with no
+    // dialog ever shown — the browser itself lacks the OS-level notification
+    // permission (Settings → Apps → <browser> → Notifications is off, or the
+    // Android 13+ POST_NOTIFICATIONS runtime permission was never granted to
+    // it), so it can't even ask the user per-site. Point them at the fix.
+    const opened = await openOsNotificationSettings();
+    _osBlocked = true;
+    _osSettingsOpened = opened;
+    return false;
+  }
 
   // ── 2. Register & update the service worker ────────────────────────────────
   // Force-activate the latest SW version immediately.
@@ -394,19 +435,32 @@ export function useNotificationToggle(): NotificationToggleState {
         return;
       }
 
-      if (permission === "denied") return;
+      if (permission === "denied") {
+        const opened = await openOsNotificationSettings();
+        setOsBlocked(true);
+        setOsSettingsOpened(opened);
+        return;
+      }
 
       // First-time: full permission chain.
       const ok = await enableNotifications();
-      setPermission(await checkPermission());
+      const newPerm = await checkPermission();
+      setPermission(newPerm);
+      // Sync module-level flags back into React state regardless of outcome —
+      // a failed attempt is exactly when the OS-blocked banner matters most.
+      setOsBlocked(_osBlocked);
+      setOsSettingsOpened(_osSettingsOpened);
 
       if (ok) {
         setEnabled(true);
-        // Sync module-level flags back into React state.
-        setOsBlocked(_osBlocked);
-        setOsSettingsOpened(_osSettingsOpened);
       } else {
-        setError("Couldn't enable notifications — try again.");
+        setError(
+          newPerm === "granted"
+            ? "Couldn't enable notifications — try again."
+            : newPerm === "denied"
+            ? "Notifications are blocked for this browser. Check the settings below, then try again."
+            : "No permission prompt appeared — your device is blocking notifications for this browser. Check the settings below."
+        );
       }
     } finally {
       setWorking(false);

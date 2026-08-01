@@ -420,9 +420,11 @@ export default function Delivery() {
               </button>
               {notifError && <div style={{ fontSize: "0.76rem", color: "var(--danger)", marginTop: 8 }}>{notifError}</div>}
 
-              {/* OS-level permission blocked banner ── shown when browser says granted
-                  but the OS probe detected the system is swallowing notifications */}
-              {notifEnabled && notifOsBlocked && (
+              {/* OS-level permission blocked banner ── shown either when the OS
+                  never even let the browser show a permission prompt (pre-grant)
+                  or when browser says granted but the OS probe detected the
+                  system is swallowing notifications (post-grant) */}
+              {notifOsBlocked && (
                 <div style={{
                   marginTop: 12, borderRadius: 12, overflow: "hidden",
                   border: "1px solid rgba(251,146,60,0.4)",
@@ -437,13 +439,17 @@ export default function Delivery() {
                       </span>
                     </div>
                     <div style={{ fontSize: "0.76rem", color: "var(--ink-3)", lineHeight: 1.6, marginBottom: 10 }}>
-                      {notifOs === "windows"
-                        ? <>Your browser permission is granted, but <strong>Windows</strong> is blocking Chrome from showing notifications. We'll open <strong>Windows Settings → Notifications</strong> for you — just turn on <strong>Google Chrome</strong>.</>
-                        : notifOs === "mac"
-                        ? <>macOS is blocking Chrome. We'll open <strong>System Settings → Notifications → Google Chrome</strong> — set it to <strong>Banners</strong> or <strong>Alerts</strong>.</>
-                        : notifOs === "android"
-                        ? <>Android is blocking notifications for this app. We'll open <strong>App Settings</strong> — enable notifications there.</>
-                        : <>Your OS is blocking notifications. Click below to open the system notification settings.</>}
+                      {notifEnabled ? (
+                        notifOs === "windows"
+                          ? <>Your browser permission is granted, but <strong>Windows</strong> is blocking Chrome from showing notifications. We'll open <strong>Windows Settings → Notifications</strong> for you — just turn on <strong>Google Chrome</strong>.</>
+                          : notifOs === "mac"
+                          ? <>macOS is blocking Chrome. We'll open <strong>System Settings → Notifications → Google Chrome</strong> — set it to <strong>Banners</strong> or <strong>Alerts</strong>.</>
+                          : notifOs === "android"
+                          ? <>Android is blocking notifications for this app. We'll open <strong>App Settings</strong> — enable notifications there.</>
+                          : <>Your OS is blocking notifications. Click below to open the system notification settings.</>
+                      ) : (
+                        <>No permission prompt appeared when you tapped the toggle — <strong>{notifOs === "android" ? "Android" : notifOs === "windows" ? "Windows" : notifOs === "mac" ? "macOS" : "your device"}</strong> is blocking this browser from asking at all. Enable notifications for your browser app in system settings, then tap the toggle again.</>
+                      )}
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button
@@ -463,14 +469,25 @@ export default function Delivery() {
                           ? "Open App Settings →"
                           : "Open System Settings →"}
                       </button>
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-secondary"
-                        style={{ fontSize: "0.78rem" }}
-                        onClick={recheckNotifOs}
-                      >
-                        ✓ Done — verify
-                      </button>
+                      {notifEnabled ? (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary"
+                          style={{ fontSize: "0.78rem" }}
+                          onClick={recheckNotifOs}
+                        >
+                          ✓ Done — verify
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary"
+                          style={{ fontSize: "0.78rem" }}
+                          onClick={handleToggleNotifications}
+                        >
+                          ✓ I've enabled it — retry
+                        </button>
+                      )}
                     </div>
                   </div>
                   {notifOsSettingsOpened && (
@@ -478,7 +495,9 @@ export default function Delivery() {
                       padding: "8px 14px", borderTop: "1px solid rgba(251,146,60,0.25)",
                       fontSize: "0.72rem", color: "var(--ink-4)", background: "rgba(251,146,60,0.04)",
                     }}>
-                      Settings page opened — enable Chrome notifications there, then click "Done — verify" above.
+                      {notifEnabled
+                        ? <>Settings page opened — enable notifications there, then click "Done — verify" above.</>
+                        : <>Settings page opened — enable notifications there, then click "I've enabled it — retry" above.</>}
                     </div>
                   )}
                 </div>
