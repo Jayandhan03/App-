@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useRef, useState, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import AppNav from "@/components/AppNav";
 
@@ -55,10 +55,27 @@ function fmt(s: number): string {
 }
 
 export default function TestBriefingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="row center" style={{ minHeight: "100vh" }}>
+          <span className="spinner" />
+        </div>
+      }
+    >
+      <TestBriefingInner />
+    </Suspense>
+  );
+}
+
+function TestBriefingInner() {
   const { status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token");
 
   const utterRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const startTimeRef = useRef<number>(0);
   const rafRef = useRef<number>(0);
 
@@ -67,6 +84,12 @@ export default function TestBriefingPage() {
   const [elapsed, setElapsed] = useState(0);
   const [totalDuration, setTotalDuration] = useState(SAMPLE_DURATION_APPROX);
   const [ended, setEnded] = useState(false);
+
+  // Real generated audio (fetched by token). When this is set, playback is
+  // driven by the <audio> element instead of on-device speech synthesis.
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioLoading, setAudioLoading] = useState(Boolean(token));
+  const [audioNote, setAudioNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/signin");
@@ -81,7 +104,50 @@ export default function TestBriefingPage() {
     }
   }, [status, router]);
 
-  // Keep elapsed time ticking while speaking.
+  // Fetch the real generated voice note for this token, if we have one.
+  // Falls back to on-device speech synthesis (below) if it's missing,
+  // expired, or fails to load.
+  useEffect(() => {
+    if (!token || status !== "authenticated") return;
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/inapp-test-voice?token=${encodeURIComponent(token)}`);
+        if (!res.ok) {
+          const e = await res.json().catch(() => ({}));
+          if (!cancelled) setAudioNote(e.error ?? "Generated audio expired — playing the demo voice instead.");
+          return;
+        }
+        const blob = await res.blob();
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setAudioUrl(objectUrl);
+      } catch (err) {
+        console.warn("[test-briefing] audio fetch failed:", err);
+        if (!cancelled) setAudioNote("Couldn't load the generated audio — playing the demo voice instead.");
+      } finally {
+        if (!cancelled) setAudioLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [token, status]);
+
+  // Try to auto-play the real audio once it's loaded (simulates opening from
+  // a notification tap). Browsers may block autoplay across a full page
+  // navigation — that's fine, the user just taps play manually.
+  useEffect(() => {
+    if (!audioUrl) return;
+    audioRef.current?.play().catch(() => { /* autoplay blocked — wait for tap */ });
+  }, [audioUrl]);
+
+  // Keep elapsed time ticking while speaking (speech-synthesis mode only —
+  // audio mode gets timing straight from the <audio> element's events).
   const tick = useCallback(() => {
     const dt = (Date.now() - startTimeRef.current) / 1000;
     setElapsed(Math.min(dt, totalDuration));
@@ -151,9 +217,11 @@ export default function TestBriefingPage() {
     }
   }, [buildUtterance]);
 
-  // Auto-play on mount (simulates opening from a notification tap).
+  // Auto-play on mount via speech synthesis — only once we know there's no
+  // real generated audio to use instead (no token, expired, or failed).
   useEffect(() => {
     if (status !== "authenticated" || !supported) return;
+    if (audioLoading || audioUrl) return;
 
     try {
       // Voices may load async.
@@ -175,9 +243,21 @@ export default function TestBriefingPage() {
       stopTicking();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, supported]);
+  }, [status, supported, audioLoading, audioUrl]);
 
   function togglePlay() {
+    if (audioUrl) {
+      const el = audioRef.current;
+      if (!el) return;
+      if (el.paused) {
+        setEnded(false);
+        el.play().catch((err) => console.warn("[test-briefing] audio play failed:", err));
+      } else {
+        el.pause();
+      }
+      return;
+    }
+
     if (!supported) return;
     try {
       if (speechSynthesis.speaking && !speechSynthesis.paused) {
@@ -205,6 +285,16 @@ export default function TestBriefingPage() {
   function handleSeekClick(e: React.MouseEvent<HTMLDivElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
     const ratio = (e.clientX - rect.left) / rect.width;
+
+    if (audioUrl) {
+      const el = audioRef.current;
+      if (el && isFinite(el.duration)) {
+        el.currentTime = ratio * el.duration;
+        setEnded(false);
+      }
+      return;
+    }
+
     // SpeechSynthesis doesn't support true seeking — restart if clicking past half.
     if (ratio < 0.05) {
       try {
@@ -217,6 +307,7 @@ export default function TestBriefingPage() {
   }
 
   const progress = totalDuration > 0 ? Math.min(elapsed / totalDuration, 1) : 0;
+  const playerReady = Boolean(audioUrl) || supported;
 
   if (status === "loading" || status === "unauthenticated") {
     return (
@@ -229,6 +320,26 @@ export default function TestBriefingPage() {
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       <AppNav />
+
+      {audioUrl && (
+        <audio
+          ref={audioRef}
+          src={audioUrl}
+          preload="auto"
+          style={{ display: "none" }}
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          onEnded={() => { setPlaying(false); setEnded(true); }}
+          onTimeUpdate={(e) => setElapsed(e.currentTarget.currentTime)}
+          onLoadedMetadata={(e) => {
+            if (isFinite(e.currentTarget.duration)) setTotalDuration(e.currentTarget.duration);
+          }}
+          onError={() => {
+            setAudioNote("Couldn't play the generated audio — playing the demo voice instead.");
+            setAudioUrl(null);
+          }}
+        />
+      )}
 
       <main
         style={{
@@ -391,7 +502,12 @@ export default function TestBriefingPage() {
           </div>
 
           {/* ── Audio player ── */}
-          {!supported ? (
+          {audioLoading ? (
+            <div className="row center" style={{ padding: "24px 0", gap: 10 }}>
+              <span className="spinner" />
+              <span style={{ fontSize: "0.82rem", color: "var(--ink-3)" }}>Loading your voice note…</span>
+            </div>
+          ) : !playerReady ? (
             <div
               style={{
                 padding: "18px",
@@ -469,7 +585,7 @@ export default function TestBriefingPage() {
                 <WaveformBars playing={playing} progress={progress} />
               </div>
 
-              {/* Seek bar (click to restart) */}
+              {/* Seek bar */}
               <div
                 onClick={handleSeekClick}
                 style={{
@@ -536,6 +652,19 @@ export default function TestBriefingPage() {
               ? "Playing…"
               : "Tap play to hear your sample briefing"}
           </div>
+
+          {audioNote && !audioUrl && (
+            <div
+              style={{
+                textAlign: "center",
+                marginTop: 4,
+                fontSize: "0.7rem",
+                color: "rgba(160,175,220,0.45)",
+              }}
+            >
+              {audioNote}
+            </div>
+          )}
 
           {/* Footer buttons */}
           <div

@@ -67,6 +67,7 @@ export default function Delivery() {
   const [inappTestSent, setInappTestSent] = useState(false);
   const [inappTestError, setInappTestError] = useState<string | null>(null);
   const [inappToast, setInappToast] = useState(false); // in-page toast, always works
+  const [lastVoiceToken, setLastVoiceToken] = useState<string | null>(null);
 
   useEffect(() => { if (status === "unauthenticated") router.replace("/signin"); }, [status, router]);
 
@@ -177,8 +178,11 @@ export default function Delivery() {
       }
 
       // The notification tap target takes the user directly to /test-briefing
-      // where the voice briefing plays automatically.
-      const clickUrl = "/test-briefing";
+      // where the voice briefing plays automatically. Carry the token through
+      // so that page can fetch and play the real generated audio instead of
+      // falling back to an on-device text-to-speech reading.
+      setLastVoiceToken(voiceToken);
+      const clickUrl = voiceToken ? `/test-briefing?token=${voiceToken}` : "/test-briefing";
 
       // ── Step 3: Get the live FCM token for this device ────────────────────
       let deviceToken: string | null = null;
@@ -299,7 +303,7 @@ export default function Delivery() {
       {/* ── In-page toast overlay ── shows regardless of OS notification settings */}
       {inappToast && (
         <div
-          onClick={() => router.push("/test-briefing")}
+          onClick={() => router.push(lastVoiceToken ? `/test-briefing?token=${lastVoiceToken}` : "/test-briefing")}
           style={{
             position: "fixed", top: 20, right: 20, zIndex: 9999,
             width: 340, maxWidth: "calc(100vw - 40px)",
