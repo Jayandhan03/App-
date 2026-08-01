@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import AppNav from "@/components/AppNav";
 import { useNotificationToggle } from "@/lib/push";
+import { isNativeApp } from "@/lib/capacitor";
 
 function TgIcon({ size = 20, color = "#fff" }: { size?: number; color?: string }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill={color}><path d="M20.665 3.717l-17.73 6.837c-1.21.486-1.203 1.161-.222 1.462l4.552 1.42 10.532-6.645c.498-.303.953-.14.579.192l-8.533 7.701-.314 4.692c.46 0 .663-.211.921-.46l2.211-2.15 4.599 3.397c.848.467 1.457.227 1.668-.787l3.019-14.228c.309-1.239-.473-1.8-1.282-1.432z" /></svg>;
@@ -141,23 +142,7 @@ export default function Delivery() {
     setInappTestSent(false);
 
     try {
-      // ── Step 1: Force-register & update the service worker ────────────────
-      let swReg: ServiceWorkerRegistration | undefined;
-      try {
-        swReg = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
-        await swReg.update();
-        const waiting = swReg.waiting;
-        if (waiting) {
-          waiting.postMessage({ type: "SKIP_WAITING" });
-          await new Promise((r) => setTimeout(r, 500));
-        }
-        await Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(r, 3000))]);
-        swReg = await navigator.serviceWorker.ready;
-      } catch (swErr) {
-        console.warn("[inapp-test] SW registration/update failed:", swErr);
-      }
-
-      // ── Step 2: Generate a voice note sample and get a token ──────────────
+      // ── Generate a voice note sample and get a token (both platforms) ──────
       // The token is embedded in the notification's click_action so when the
       // user taps it they land on /test-briefing?token=... with the audio ready.
       let voiceToken: string | null = null;
@@ -184,7 +169,49 @@ export default function Delivery() {
       setLastVoiceToken(voiceToken);
       const clickUrl = voiceToken ? `/test-briefing?token=${voiceToken}` : "/test-briefing";
 
-      // ── Step 3: Get the live FCM token for this device ────────────────────
+      // ── Native app: none of the web-push machinery below applies ───────────
+      // No browser service worker, no web FCM token, no Notification API —
+      // the native token was already registered via enableNativePush() when
+      // the toggle above was turned on. Just send the push; PushNotification
+      // Bridge (mounted app-wide) shows the real Android notification —
+      // whether the FCM/Android SDK auto-displays it (backgrounded) or our
+      // pushNotificationReceived handler posts a local notification for it
+      // (foreground, which is what happens while this button is on screen).
+      if (isNativeApp()) {
+        const res = await fetch("/api/inapp-test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clickUrl }),
+        });
+        if (!res.ok) {
+          const e = await res.json().catch(() => ({}));
+          setInappTestError(e.error ?? "Test failed.");
+          return;
+        }
+        setInappToast(true);
+        setTimeout(() => setInappToast(false), 6000);
+        setInappTestSent(true);
+        setTimeout(() => setInappTestSent(false), 5000);
+        return;
+      }
+
+      // ── Web: register/update the service worker ─────────────────────────
+      let swReg: ServiceWorkerRegistration | undefined;
+      try {
+        swReg = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+        await swReg.update();
+        const waiting = swReg.waiting;
+        if (waiting) {
+          waiting.postMessage({ type: "SKIP_WAITING" });
+          await new Promise((r) => setTimeout(r, 500));
+        }
+        await Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(r, 3000))]);
+        swReg = await navigator.serviceWorker.ready;
+      } catch (swErr) {
+        console.warn("[inapp-test] SW registration/update failed:", swErr);
+      }
+
+      // ── Get the live FCM token for this device ─────────────────────────────
       let deviceToken: string | null = null;
       try {
         const { initializeApp, getApps } = await import("firebase/app");
@@ -229,7 +256,7 @@ export default function Delivery() {
         console.warn("[inapp-test] could not get live FCM token:", tokenErr);
       }
 
-      // ── Step 4: Send via the Admin SDK API (includes voice click_action) ───
+      // ── Send via the Admin SDK API (includes voice click_action) ───────────
       const res = await fetch("/api/inapp-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -248,7 +275,7 @@ export default function Delivery() {
       setInappToast(true);
       setTimeout(() => setInappToast(false), 6000);
 
-      // ── Step 5: Immediate local SW notification with voice click URL ───────
+      // ── Immediate local SW notification with voice click URL ───────────────
       // This is the one that actually has to land in the OS notification
       // shade — the toast above is just an in-page fallback so something is
       // always visible even if the system notification is blocked. Track its
