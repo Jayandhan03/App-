@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     };
     const data = { click_action: clickUrl, type: "test" };
     const webpush = {
-      notification: { icon: "/icon.svg", badge: "/icon.svg", requireInteraction: false },
+      notification: { icon: "/icon-192.png", badge: "/icon-192.png", requireInteraction: false },
       fcmOptions: { link: clickUrl },
     };
     const android = {

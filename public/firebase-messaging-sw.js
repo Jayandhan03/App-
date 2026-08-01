@@ -60,8 +60,8 @@ messaging.onBackgroundMessage((payload) => {
   const body  = payload.notification?.body  ?? "New briefing ready.";
   self.registration.showNotification(title, {
     body,
-    icon: "/icon.svg",
-    badge: "/icon.svg",
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
     data: payload.data ?? {},
   });
 });

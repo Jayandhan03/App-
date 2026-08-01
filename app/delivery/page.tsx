@@ -205,7 +205,7 @@ export default function Delivery() {
           try {
             const sw = await navigator.serviceWorker.ready;
             await sw.showNotification(title, {
-              body, icon: "/icon.svg", badge: "/icon.svg",
+              body, icon: "/icon-192.png", badge: "/icon-192.png",
               data: (payload.data as Record<string, string>) ?? {},
             });
           } catch {
@@ -251,8 +251,8 @@ export default function Delivery() {
         const sw = await navigator.serviceWorker.ready;
         await sw.showNotification("🎧 Test briefing ready", {
           body: "Your Leora voice note is ready — tap to listen.",
-          icon: "/icon.svg",
-          badge: "/icon.svg",
+          icon: "/icon-192.png",
+          badge: "/icon-192.png",
           tag: "leora-test",
           data: { click_action: clickUrl },
         });

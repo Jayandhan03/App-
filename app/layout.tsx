@@ -20,6 +20,9 @@ export const metadata: Metadata = {
     title: "Leora — Personal AI agents that brief you by voice",
     description: "Agents that read the web for you and brief you by voice. Listen, don't scroll.",
   },
+  icons: {
+    apple: "/apple-icon.png",
+  },
 };
 
 export const viewport: Viewport = {

@@ -226,13 +226,13 @@ async function enableWebPush(): Promise<boolean> {
       const sw = await navigator.serviceWorker.ready;
       await sw.showNotification(title, {
         body,
-        icon: "/icon.svg",
-        badge: "/icon.svg",
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
         data: (payload.data as Record<string, string>) ?? {},
       });
     } catch {
       if (Notification.permission === "granted")
-        new Notification(title, { body, icon: "/icon.svg" });
+        new Notification(title, { body, icon: "/icon-192.png" });
     }
   });
 
