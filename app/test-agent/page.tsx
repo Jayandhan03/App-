@@ -616,7 +616,7 @@ export default function CreateAgent() {
                       <Logo size={24} />
                       <span>
                         <span style={{ display: "block", fontSize: "0.85rem", fontWeight: 550 }}>In the Leora app</span>
-                        <span style={{ display: "block", fontSize: "0.72rem", color: "var(--ink-3)" }}>Briefings are always saved here — web and mobile</span>
+                        <span style={{ display: "block", fontSize: "0.72rem", color: "var(--ink-3)" }}>Turn on in-app notifications here</span>
                       </span>
                     </span>
                     {!notifSupported ? (

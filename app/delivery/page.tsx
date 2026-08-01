@@ -164,7 +164,7 @@ export default function Delivery() {
                   <span className="row center" style={{ width: 44, height: 44, borderRadius: "var(--r-md)", background: "var(--solid)", color: "var(--solid-ink)", flexShrink: 0 }}><AppIcon size={22} /></span>
                   <div>
                     <div style={{ fontSize: "1rem", fontWeight: 600, letterSpacing: "-0.02em" }}>In the Leora app</div>
-                    <div style={{ fontSize: "0.8rem", color: "var(--ink-3)" }}>Your voice-note inbox · web and mobile</div>
+                    <div style={{ fontSize: "0.8rem", color: "var(--ink-3)" }}>Turn on in-app notifications here</div>
                   </div>
                 </div>
                 {!notifSupported ? (
@@ -177,9 +177,6 @@ export default function Delivery() {
                   <span className="badge badge-muted"><span className="dot" /> Notifications off</span>
                 )}
               </div>
-              <p style={{ fontSize: "0.85rem", color: "var(--ink-2)", lineHeight: 1.6, margin: "16px 0 0" }}>
-                Every agent&apos;s voice notes are saved to your in-app inbox automatically — nothing to set up. Connect a chat app below to also receive them in Telegram or WhatsApp.
-              </p>
 
               <button
                 type="button"
@@ -196,7 +193,7 @@ export default function Delivery() {
                       : notifPermission === "denied"
                       ? "Blocked — enable notifications for Leora in your browser or system settings."
                       : notifEnabled
-                      ? "Get a push the moment an agent finishes a briefing."
+                      ? "Get a push when your agent scheduler is triggered."
                       : "Off — you won't get a push when a briefing is ready."}
                   </div>
                 </div>

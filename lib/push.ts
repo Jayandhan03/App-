@@ -159,20 +159,30 @@ export function useNotificationToggle() {
     setError(null);
     try {
       if (enabled) {
+        // Flip immediately — the request confirms it, it doesn't gate it.
         // Browser/OS permission can't be revoked from JS, so "off" just
         // stops us from sending — it doesn't touch the permission grant.
-        if (await setSubscriptionEnabled(platform, false)) setEnabled(false);
-        else setError("Couldn't turn off notifications — try again.");
+        setEnabled(false);
+        if (!(await setSubscriptionEnabled(platform, false))) {
+          setEnabled(true);
+          setError("Couldn't turn off notifications — try again.");
+        }
         return;
       }
       if (permission === "granted") {
         // Already granted — no need to re-prompt, just clear the flag
         // (covers the case where a token exists but was switched off).
-        if (await setSubscriptionEnabled(platform, true)) setEnabled(true);
-        else setError("Couldn't turn on notifications — try again.");
+        // Flip immediately here too; revert only if the server call fails.
+        setEnabled(true);
+        if (!(await setSubscriptionEnabled(platform, true))) {
+          setEnabled(false);
+          setError("Couldn't turn on notifications — try again.");
+        }
         return;
       }
       if (permission === "denied") return;
+      // First-time grant still has to wait on the OS/browser prompt and
+      // token registration, so there's nothing to optimistically flip here.
       const ok = await enableNotifications();
       setPermission(await checkPermission());
       if (ok) setEnabled(true);
