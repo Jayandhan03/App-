@@ -9,9 +9,10 @@ import Logo from "@/components/Logo";
 import AgentOnboardingChat, { LockedTopic } from "@/components/AgentOnboardingChat";
 import SavedTopicPicker, { SavedTopicShape } from "@/components/SavedTopicPicker";
 import TimePicker from "@/components/TimePicker";
+import DatePicker from "@/components/DatePicker";
 import { CADENCES } from "@/lib/agentConstants";
 import { useNotificationToggle } from "@/lib/push";
-import { WEEKDAYS, describeSchedule, describeNextRun, timezoneLabel, computeNextRunAt, detectTimezone, listTimezones } from "@/lib/schedule";
+import { WEEKDAYS, describeSchedule, describeNextRun, timezoneLabel, computeNextRunAt, detectTimezone, listTimezones, todayInZone } from "@/lib/schedule";
 
 function TgIcon({ size = 16, color = "currentColor" }: { size?: number; color?: string }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill={color}><path d="M20.665 3.717l-17.73 6.837c-1.21.486-1.203 1.161-.222 1.462l4.552 1.42 10.532-6.645c.498-.303.953-.14.579.192l-8.533 7.701-.314 4.692c.46 0 .663-.211.921-.46l2.211-2.15 4.599 3.397c.848.467 1.457.227 1.668-.787l3.019-14.228c.309-1.239-.473-1.8-1.282-1.432z" /></svg>;
@@ -128,6 +129,12 @@ export default function CreateAgent() {
   const [timezone, setTimezone] = useState(detectTimezone);
   const [tzPickerOpen, setTzPickerOpen] = useState(false);
   const zoneOptions = useMemo(listTimezones, []);
+  const todayStr = useMemo(() => todayInZone(timezone), [timezone]);
+  const [startDate, setStartDate] = useState(todayStr);
+  // Keep "start from" pinned to today until the user deliberately picks a
+  // different date — otherwise switching timezone could leave it in the past.
+  const [startDateTouched, setStartDateTouched] = useState(false);
+  useEffect(() => { if (!startDateTouched) setStartDate(todayStr); }, [todayStr, startDateTouched]);
 
   const [tgConnected, setTgConnected] = useState(false);
   const [tgSending, setTgSending] = useState(false);
@@ -138,7 +145,7 @@ export default function CreateAgent() {
   const [waConnected, setWaConnected] = useState(false);
   const [whatsappEnabled, setWhatsappEnabled] = useState(true);
 
-  const { permission: notifPermission, enabled: notifEnabled, working: notifWorking, supported: notifSupported, error: notifError, toggle: handleToggleNotifications } = useNotificationToggle();
+  const { permission: notifPermission, enabled: notifEnabled, loading: notifLoading, working: notifWorking, supported: notifSupported, error: notifError, toggle: handleToggleNotifications } = useNotificationToggle();
 
   const [deploying, setDeploying] = useState(false);
   const [deployError, setDeployError] = useState<string | null>(null);
@@ -221,10 +228,15 @@ export default function CreateAgent() {
     whatsappEnabled && waConnected ? "WhatsApp" : null,
   ].filter((c): c is string => Boolean(c));
 
+  // Ticks once a minute so "Next voice note" stays accurate on a page left
+  // open a while, instead of freezing at whatever "now" was on last compute.
+  const [clockTick, setClockTick] = useState(0);
+  useEffect(() => { const id = setInterval(() => setClockTick(t => t + 1), 60_000); return () => clearInterval(id); }, []);
+
   const nextRunText = useMemo(() => {
-    const next = computeNextRunAt({ frequency: cadence.label, intervalMinutes: cadence.intervalMinutes, times, weekday, timezone });
+    const next = computeNextRunAt({ frequency: cadence.label, intervalMinutes: cadence.intervalMinutes, times, weekday, timezone, startDate });
     return describeNextRun(next, timezone);
-  }, [cadence, times, weekday, timezone]);
+  }, [cadence, times, weekday, timezone, startDate, clockTick]);
 
   const handleGenerate = async () => {
     const q = topic.trim();
@@ -319,6 +331,7 @@ export default function CreateAgent() {
           times,
           weekday: cadence.needsWeekday ? weekday : null,
           timezone,
+          startDate,
           scheduleEnabled: true,
           telegramEnabled: telegramEnabled && tgConnected,
           whatsappEnabled: whatsappEnabled && waConnected,
@@ -511,14 +524,6 @@ export default function CreateAgent() {
                 ))}
               </div>
 
-              {cadence.needsWeekday && (
-                <div className="row wrap" style={{ gap: 6, marginTop: 14 }}>
-                  {WEEKDAYS.map((d, i) => (
-                    <button key={d} type="button" onClick={() => setWeekday(i)} style={{ ...chip(weekday === i), padding: "6px 12px", fontSize: "0.78rem" }}>{d}</button>
-                  ))}
-                </div>
-              )}
-
               {cadence.timeSlots > 0 && (
                 <div style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid var(--line)" }}>
                   <div className="row wrap" style={{ gap: 28, alignItems: "flex-start" }}>
@@ -566,6 +571,35 @@ export default function CreateAgent() {
                 )}
               </div>
 
+              {/* Weekly digest just needs a weekday — a calendar date picker doesn't
+                  apply to "every Sunday". Every other cadence needs an actual
+                  start date instead. */}
+              {cadence.needsWeekday ? (
+                <div className="row between wrap" style={{ gap: 10, marginTop: 18, paddingTop: 18, borderTop: "1px solid var(--line)" }}>
+                  <span className="row" style={{ gap: 8, fontSize: "0.85rem", color: "var(--ink-2)" }}>
+                    <span style={{ fontSize: "1rem" }}>📆</span>
+                    <span style={{ fontWeight: 550 }}>Repeats every</span>
+                  </span>
+                  <div className="row wrap" style={{ gap: 6, justifyContent: "flex-end" }}>
+                    {WEEKDAYS.map((d, i) => (
+                      <button key={d} type="button" onClick={() => setWeekday(i)} style={{ ...chip(weekday === i), padding: "6px 12px", fontSize: "0.78rem" }}>{d}</button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="row between wrap" style={{ gap: 8, marginTop: 18, paddingTop: 18, borderTop: "1px solid var(--line)" }}>
+                  <span className="row" style={{ gap: 8, fontSize: "0.85rem", color: "var(--ink-2)" }}>
+                    <span style={{ fontSize: "1rem" }}>📆</span>
+                    <span style={{ fontWeight: 550 }}>Start from</span>
+                  </span>
+                  <DatePicker
+                    value={startDate}
+                    min={todayStr}
+                    onChange={v => { setStartDateTouched(true); setStartDate(v); }}
+                  />
+                </div>
+              )}
+
               <p className="t-muted" style={{ fontSize: "0.8rem", marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--line)" }}>
                 {describeSchedule({ frequency: cadence.label, intervalMinutes: cadence.intervalMinutes, times, weekday, timezone })}
               </p>
@@ -610,48 +644,29 @@ export default function CreateAgent() {
                 )}
 
                 {/* In-app inbox — always on; notifications are the opt-in part */}
-                <div style={{ width: "100%", padding: "12px 14px", borderRadius: "var(--r-md)", border: "1px solid var(--line)", background: "var(--surface-2)" }}>
-                  <div className="row between">
-                    <span className="row" style={{ gap: 10 }}>
-                      <Logo size={24} />
-                      <span>
-                        <span style={{ display: "block", fontSize: "0.85rem", fontWeight: 550 }}>In the Leora app</span>
-                        <span style={{ display: "block", fontSize: "0.72rem", color: "var(--ink-3)" }}>Turn on in-app notifications here</span>
-                      </span>
-                    </span>
-                    {!notifSupported ? (
-                      <span className="badge badge-muted" style={{ fontSize: "0.62rem", flexShrink: 0 }}><span className="dot" /> Not supported here</span>
-                    ) : notifPermission === "denied" ? (
-                      <span className="badge badge-muted" style={{ fontSize: "0.62rem", flexShrink: 0 }}><span className="dot" /> Notifications blocked</span>
-                    ) : notifEnabled ? (
-                      <span className="badge badge-accent" style={{ fontSize: "0.62rem", flexShrink: 0 }}><span className="dot dot-live" /> Notifications on</span>
-                    ) : (
-                      <span className="badge badge-muted" style={{ fontSize: "0.62rem", flexShrink: 0 }}><span className="dot" /> Notifications off</span>
-                    )}
+                {notifLoading ? (
+                  <div className="row between" style={{ width: "100%", padding: "12px 14px", borderRadius: "var(--r-md)", border: "1px solid var(--line-2)", background: "var(--surface-2)", opacity: 0.6 }}>
+                    <span className="row" style={{ gap: 9 }}><Logo size={15} /> Send to Leora</span>
+                    <span className="badge badge-muted" style={{ fontSize: "0.62rem", flexShrink: 0 }}>Checking…</span>
                   </div>
+                ) : notifSupported && notifPermission !== "denied" ? (
                   <button
                     type="button"
                     onClick={handleToggleNotifications}
-                    disabled={notifWorking || !notifSupported || notifPermission === "denied"}
+                    disabled={notifWorking}
                     className="row between"
-                    style={{
-                      width: "100%", marginTop: 10, padding: "10px 12px", borderRadius: "var(--r-sm)",
-                      border: `1px solid ${notifEnabled ? "var(--accent-line)" : "var(--line-2)"}`,
-                      background: notifEnabled ? "var(--accent-soft)" : "var(--surface)",
-                      cursor: !notifSupported || notifPermission === "denied" ? "not-allowed" : "pointer",
-                    }}
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: "var(--r-md)", border: `1px solid ${notifEnabled ? "var(--accent-line)" : "var(--line-2)"}`, background: notifEnabled ? "var(--accent-soft)" : "var(--surface-2)", cursor: "pointer" }}
                   >
-                    <span style={{ fontSize: "0.78rem" }}>
-                      {!notifSupported
-                        ? "🔕 Not supported in this browser"
-                        : notifPermission === "denied"
-                        ? "🔕 Notifications blocked — check your browser/system settings"
-                        : "🔔 Notify me on new briefings"}
-                    </span>
-                    {notifSupported && notifPermission !== "denied" && <span className="toggle" data-on={notifEnabled} />}
+                    <span className="row" style={{ gap: 9 }}><Logo size={15} /> Send to Leora</span>
+                    <span className="toggle" data-on={notifEnabled} />
                   </button>
-                  {notifError && <div style={{ fontSize: "0.72rem", color: "var(--danger)", marginTop: 8 }}>{notifError}</div>}
-                </div>
+                ) : (
+                  <div className="row between" style={{ width: "100%", padding: "12px 14px", borderRadius: "var(--r-md)", border: "1px solid var(--line-2)", background: "var(--surface-2)" }}>
+                    <span className="row" style={{ gap: 9 }}><Logo size={15} /> Send to Leora</span>
+                    <span className="badge badge-muted" style={{ fontSize: "0.62rem", flexShrink: 0 }}>{!notifSupported ? "Not supported here" : "Blocked"}</span>
+                  </div>
+                )}
+                {notifError && <div style={{ fontSize: "0.72rem", color: "var(--danger)", marginTop: 4 }}>{notifError}</div>}
               </div>
 
             </Step>

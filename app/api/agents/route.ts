@@ -147,6 +147,7 @@ export async function POST(req: Request) {
     const times = Array.isArray(body.times) ? body.times.filter((t: unknown) => typeof t === "string" && /^\d{2}:\d{2}$/.test(t)) : ["09:00"];
     const weekday = Number.isInteger(body.weekday) && body.weekday >= 0 && body.weekday <= 6 ? body.weekday : null;
     const timezone = typeof body.timezone === "string" && body.timezone ? body.timezone : "UTC";
+    const startDate = typeof body.startDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.startDate) ? body.startDate : null;
     const scheduleEnabled = body.scheduleEnabled !== false;
 
     // Never trust client-supplied connection state — derive delivery from the real links.
@@ -198,7 +199,7 @@ export async function POST(req: Request) {
         weekday,
         timezone,
         enabled: scheduleEnabled,
-        nextRunAt: scheduleEnabled ? computeNextRunAt({ frequency, intervalMinutes, times, weekday, timezone }) : null,
+        nextRunAt: scheduleEnabled ? computeNextRunAt({ frequency, intervalMinutes, times, weekday, timezone, startDate }) : null,
         lastSentAt: null,
       },
       stats: { briefingsSent: 0, sourcesTracked: 0 },

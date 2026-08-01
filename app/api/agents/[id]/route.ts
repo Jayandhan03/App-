@@ -55,6 +55,10 @@ export async function PATCH(req: Request, { params }: Ctx) {
       timezone: agent.schedule.timezone,
     };
     let scheduleTouched = false;
+    // Only present when the caller wants the next run pushed out to a
+    // specific day (e.g. "start from" on cadence edits) — not persisted,
+    // just used once below to compute the resulting nextRunAt.
+    let startDate: string | null = null;
 
     if (typeof body.timezone === "string" && body.timezone) {
       effective.timezone = body.timezone;
@@ -75,6 +79,9 @@ export async function PATCH(req: Request, { params }: Ctx) {
         set["schedule.weekday"] = weekday;
       }
       if (Number.isFinite(intervalMinutes)) { effective.intervalMinutes = intervalMinutes; set["schedule.intervalMinutes"] = intervalMinutes; }
+      if (typeof body.cadence.startDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.cadence.startDate)) {
+        startDate = body.cadence.startDate;
+      }
       scheduleTouched = true;
     }
 
@@ -89,7 +96,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
     }
 
     if (scheduleTouched) {
-      set["schedule.nextRunAt"] = willBeEnabled ? computeNextRunAt(effective) : null;
+      set["schedule.nextRunAt"] = willBeEnabled ? computeNextRunAt({ ...effective, startDate }) : null;
     }
 
     if (typeof body.voice === "string" && body.voice) set["personality.voice"] = body.voice;

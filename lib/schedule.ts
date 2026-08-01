@@ -34,6 +34,7 @@ export type ScheduleInput = {
   times: string[]; // "HH:MM", 24-hour, wall-clock in `timezone`
   weekday: number | null; // 0=Sun..6=Sat — only meaningful for "Weekly digest"
   timezone: string; // IANA zone, e.g. "Asia/Kolkata"
+  startDate?: string | null; // "YYYY-MM-DD" wall-clock in `timezone` — no run is computed before this date
 };
 
 const WD_INDEX: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
@@ -74,28 +75,40 @@ function zonedParts(date: Date, timeZone: string) {
  * timezone) looking for the next upcoming time-of-day match.
  */
 export function computeNextRunAt(schedule: ScheduleInput, now: Date = new Date()): Date {
-  if (schedule.frequency === "Real-time" || schedule.frequency === "Hourly") {
-    const minutes = Math.max(1, schedule.intervalMinutes || 60);
-    return new Date(now.getTime() + minutes * 60_000);
+  const tz = schedule.timezone || "UTC";
+
+  // A chosen start date pushes the earliest eligible instant forward to
+  // midnight on that day — everything below just treats that as "now".
+  let effectiveNow = now;
+  if (schedule.startDate) {
+    const [sy, sm, sd] = schedule.startDate.split("-").map(Number);
+    if (sy && sm && sd) {
+      const startOfDay = zonedWallTimeToUtc(sy, sm, sd, 0, 0, tz);
+      if (startOfDay.getTime() > effectiveNow.getTime()) effectiveNow = startOfDay;
+    }
   }
 
-  const tz = schedule.timezone || "UTC";
+  if (schedule.frequency === "Real-time" || schedule.frequency === "Hourly") {
+    const minutes = Math.max(1, schedule.intervalMinutes || 60);
+    return new Date(effectiveNow.getTime() + minutes * 60_000);
+  }
+
   const times = schedule.times?.length ? schedule.times : ["09:00"];
   const candidates: Date[] = [];
 
   for (let dayOffset = 0; dayOffset <= 7; dayOffset++) {
-    const probe = new Date(now.getTime() + dayOffset * 86_400_000);
+    const probe = new Date(effectiveNow.getTime() + dayOffset * 86_400_000);
     const { year, month, day, weekdayShort } = zonedParts(probe, tz);
     if (schedule.weekday != null && WD_INDEX[weekdayShort] !== schedule.weekday) continue;
 
     for (const t of times) {
       const [hh, mm] = t.split(":").map(Number);
       const candidate = zonedWallTimeToUtc(year, month, day, hh || 0, mm || 0, tz);
-      if (candidate.getTime() > now.getTime()) candidates.push(candidate);
+      if (candidate.getTime() > effectiveNow.getTime()) candidates.push(candidate);
     }
   }
 
-  if (!candidates.length) return new Date(now.getTime() + 24 * 60 * 60_000);
+  if (!candidates.length) return new Date(effectiveNow.getTime() + 24 * 60 * 60_000);
   return candidates.reduce((min, d) => (d < min ? d : min));
 }
 
@@ -112,6 +125,12 @@ export function formatTimeInZone(t: string, timeZone: string, refDate: Date = ne
   const { year, month, day } = zonedParts(refDate, timeZone);
   const instant = zonedWallTimeToUtc(year, month, day, hh || 0, mm || 0, timeZone);
   return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", timeZoneName: "short", timeZone }).format(instant);
+}
+
+/** Today's date as "YYYY-MM-DD", as it reads on a wall clock in `timeZone`. */
+export function todayInZone(timeZone: string, refDate: Date = new Date()): string {
+  const { year, month, day } = zonedParts(refDate, timeZone);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 /** A short human label for an IANA zone, e.g. "Asia/Kolkata (GMT+5:30)". */

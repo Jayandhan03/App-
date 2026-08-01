@@ -104,7 +104,41 @@ export default function Dashboard() {
     return () => { window.removeEventListener("resize", close); window.removeEventListener("scroll", close, true); document.removeEventListener("keydown", onKey); };
   }, [menu]);
 
+  // Applies the same fields the PATCH route accepts, so the UI reflects the
+  // change the instant it's clicked instead of waiting on the round-trip.
+  const applyOptimisticPatch = (agent: Agent, body: Record<string, unknown>): Agent => {
+    const next: Agent = { ...agent, personality: { ...agent.personality }, schedule: { ...agent.schedule }, platforms: agent.platforms.map(p => ({ ...p })) };
+    if (body.status === "active" || body.status === "paused") {
+      next.status = body.status;
+      next.schedule.enabled = body.status === "active";
+    }
+    if (typeof body.voice === "string") next.personality.voice = body.voice;
+    if (typeof body.language === "string") next.personality.language = body.language;
+    if (typeof body.telegramEnabled === "boolean") {
+      next.platforms = next.platforms.map(p => (p.platform === "telegram" ? { ...p, connected: body.telegramEnabled as boolean } : p));
+    }
+    if (typeof body.whatsappEnabled === "boolean") {
+      next.platforms = next.platforms.map(p => (p.platform === "whatsapp" ? { ...p, connected: body.whatsappEnabled as boolean } : p));
+    }
+    if (typeof body.timezone === "string") next.schedule.timezone = body.timezone;
+    if (body.cadence && typeof body.cadence === "object") {
+      const c = body.cadence as Record<string, unknown>;
+      if (typeof c.frequency === "string") next.schedule.frequency = c.frequency;
+      if (Array.isArray(c.times)) next.schedule.times = c.times as string[];
+      if (c.weekday === null || typeof c.weekday === "number") next.schedule.weekday = c.weekday as number | null;
+      if (typeof c.intervalMinutes === "number") next.schedule.intervalMinutes = c.intervalMinutes;
+    }
+    return next;
+  };
+
   const patchAgent = useCallback(async (id: string, body: Record<string, unknown>) => {
+    let prevAgent: Agent | undefined;
+    setAgents(p => {
+      const cur = p?.find(s => s.id === id);
+      if (!cur) return p;
+      prevAgent = cur;
+      return p!.map(s => (s.id === id ? applyOptimisticPatch(s, body) : s));
+    });
     try {
       const res = await fetch(`/api/agents/${id}`, {
         method: "PATCH",
@@ -113,7 +147,10 @@ export default function Dashboard() {
       });
       const data = await res.json().catch(() => ({}));
       if (data.success && data.agent) setAgents(p => p?.map(s => (s.id === id ? data.agent : s)) ?? p);
-    } catch { /* keep prior state on failure */ }
+      else if (prevAgent) { const reverted = prevAgent; setAgents(p => p?.map(s => (s.id === id ? reverted : s)) ?? p); }
+    } catch {
+      if (prevAgent) { const reverted = prevAgent; setAgents(p => p?.map(s => (s.id === id ? reverted : s)) ?? p); }
+    }
   }, []);
 
   const removeAgent = useCallback(async (id: string, name: string) => {

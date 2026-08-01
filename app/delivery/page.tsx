@@ -34,6 +34,7 @@ export default function Delivery() {
 
   const [tgConnected, setTgConnected] = useState(false);
   const [tgUsername, setTgUsername] = useState<string | null>(null);
+  const [tgLoading, setTgLoading] = useState(true);
   const [tgConnecting, setTgConnecting] = useState(false);
   const [tgTesting, setTgTesting] = useState(false);
   const [tgTestSent, setTgTestSent] = useState(false);
@@ -41,12 +42,13 @@ export default function Delivery() {
 
   const [waConnected, setWaConnected] = useState(false);
   const [waId, setWaId] = useState<string | null>(null);
+  const [waLoading, setWaLoading] = useState(true);
   const [waConnecting, setWaConnecting] = useState(false);
   const [waTesting, setWaTesting] = useState(false);
   const [waTestSent, setWaTestSent] = useState(false);
   const [waError, setWaError] = useState<string | null>(null);
 
-  const { permission: notifPermission, enabled: notifEnabled, working: notifWorking, supported: notifSupported, error: notifError, toggle: handleToggleNotifications } = useNotificationToggle();
+  const { permission: notifPermission, enabled: notifEnabled, loading: notifLoading, working: notifWorking, supported: notifSupported, error: notifError, toggle: handleToggleNotifications } = useNotificationToggle();
 
   useEffect(() => { if (status === "unauthenticated") router.replace("/signin"); }, [status, router]);
 
@@ -55,7 +57,7 @@ export default function Delivery() {
       try {
         const res = await fetch("/api/telegram-auth");
         if (res.ok) { const d = await res.json(); if (d.connected) { setTgConnected(true); setTgUsername(d.username ?? d.first_name ?? null); } }
-      } catch { /* silent */ }
+      } catch { /* silent */ } finally { setTgLoading(false); }
     })();
   }, []);
 
@@ -64,7 +66,7 @@ export default function Delivery() {
       try {
         const res = await fetch("/api/whatsapp-auth");
         if (res.ok) { const d = await res.json(); if (d.connected) { setWaConnected(true); setWaId(d.waId ?? null); } }
-      } catch { /* silent */ }
+      } catch { /* silent */ } finally { setWaLoading(false); }
     })();
   }, []);
 
@@ -167,7 +169,9 @@ export default function Delivery() {
                     <div style={{ fontSize: "0.8rem", color: "var(--ink-3)" }}>Turn on in-app notifications here</div>
                   </div>
                 </div>
-                {!notifSupported ? (
+                {notifLoading ? (
+                  <span className="badge badge-muted" style={{ opacity: 0.6 }}><span className="dot" /> Checking…</span>
+                ) : !notifSupported ? (
                   <span className="badge badge-muted"><span className="dot" /> Not supported here</span>
                 ) : notifPermission === "denied" ? (
                   <span className="badge badge-muted"><span className="dot" /> Notifications blocked</span>
@@ -181,14 +185,16 @@ export default function Delivery() {
               <button
                 type="button"
                 onClick={handleToggleNotifications}
-                disabled={notifWorking || !notifSupported || notifPermission === "denied"}
+                disabled={notifLoading || notifWorking || !notifSupported || notifPermission === "denied"}
                 className="row between wrap"
-                style={{ width: "100%", gap: 10, marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--line)", textAlign: "left", cursor: !notifSupported || notifPermission === "denied" ? "not-allowed" : "pointer" }}
+                style={{ width: "100%", gap: 10, marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--line)", textAlign: "left", cursor: notifLoading || !notifSupported || notifPermission === "denied" ? "not-allowed" : "pointer", opacity: notifLoading ? 0.5 : 1, transition: "opacity 0.15s var(--ease)" }}
               >
                 <div>
                   <div style={{ fontSize: "0.85rem", fontWeight: 550 }}>Notify me on new briefings</div>
                   <div style={{ fontSize: "0.76rem", color: "var(--ink-3)" }}>
-                    {!notifSupported
+                    {notifLoading
+                      ? "Checking your notification status…"
+                      : !notifSupported
                       ? "Push notifications aren't supported in this browser."
                       : notifPermission === "denied"
                       ? "Blocked — enable notifications for Leora in your browser or system settings."
@@ -197,7 +203,7 @@ export default function Delivery() {
                       : "Off — you won't get a push when a briefing is ready."}
                   </div>
                 </div>
-                {notifSupported && notifPermission !== "denied" && <span className="toggle" data-on={notifEnabled} />}
+                {!notifLoading && notifSupported && notifPermission !== "denied" && <span className="toggle" data-on={notifEnabled} />}
               </button>
               {notifError && <div style={{ fontSize: "0.76rem", color: "var(--danger)", marginTop: 8 }}>{notifError}</div>}
             </div>
@@ -212,14 +218,16 @@ export default function Delivery() {
                     <div style={{ fontSize: "0.8rem", color: "var(--ink-3)" }}>Voice-note updates in your chat</div>
                   </div>
                 </div>
-                <span className={`badge ${tgConnected ? "badge-accent" : "badge-muted"}`}>
+                <span className={`badge ${tgConnected ? "badge-accent" : "badge-muted"}`} style={tgLoading ? { opacity: 0.6 } : undefined}>
                   <span className={tgConnected ? "dot dot-live" : "dot"} style={{ background: tgConnected ? "var(--accent)" : "var(--ink-4)" }} />
-                  {tgConnected ? "Connected" : tgConnecting ? "Connecting" : "Not connected"}
+                  {tgLoading ? "Checking…" : tgConnected ? "Connected" : tgConnecting ? "Connecting" : "Not connected"}
                 </span>
               </div>
 
               <div style={{ padding: 22 }}>
-                {tgConnected ? (
+                {tgLoading ? (
+                  <div className="row center" style={{ padding: "24px 0" }}><span className="spinner" /></div>
+                ) : tgConnected ? (
                   <>
                     <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, background: "var(--accent-soft)", borderColor: "var(--accent-line)", boxShadow: "none", animation: "riseSm 0.3s var(--ease) both" }}>
                       <span className="row center" style={{ width: 38, height: 38, borderRadius: "var(--r-sm)", background: "#229ED9", flexShrink: 0 }}><TgIcon size={19} /></span>
@@ -279,14 +287,16 @@ export default function Delivery() {
                     <div style={{ fontSize: "0.8rem", color: "var(--ink-3)" }}>Voice-note updates in your chat</div>
                   </div>
                 </div>
-                <span className={`badge ${waConnected ? "badge-accent" : "badge-muted"}`}>
+                <span className={`badge ${waConnected ? "badge-accent" : "badge-muted"}`} style={waLoading ? { opacity: 0.6 } : undefined}>
                   <span className={waConnected ? "dot dot-live" : "dot"} style={{ background: waConnected ? "var(--accent)" : "var(--ink-4)" }} />
-                  {waConnected ? "Connected" : waConnecting ? "Connecting" : "Not connected"}
+                  {waLoading ? "Checking…" : waConnected ? "Connected" : waConnecting ? "Connecting" : "Not connected"}
                 </span>
               </div>
 
               <div style={{ padding: 22 }}>
-                {waConnected ? (
+                {waLoading ? (
+                  <div className="row center" style={{ padding: "24px 0" }}><span className="spinner" /></div>
+                ) : waConnected ? (
                   <>
                     <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, background: "var(--accent-soft)", borderColor: "var(--accent-line)", boxShadow: "none", animation: "riseSm 0.3s var(--ease) both" }}>
                       <span className="row center" style={{ width: 38, height: 38, borderRadius: "var(--r-sm)", background: "#25D366", flexShrink: 0 }}><WaIcon size={19} /></span>
