@@ -245,12 +245,16 @@ export default function Delivery() {
         return;
       }
 
-      setInappTestSent(true);
-      setTimeout(() => setInappTestSent(false), 5000);
       setInappToast(true);
       setTimeout(() => setInappToast(false), 6000);
 
       // ── Step 5: Immediate local SW notification with voice click URL ───────
+      // This is the one that actually has to land in the OS notification
+      // shade — the toast above is just an in-page fallback so something is
+      // always visible even if the system notification is blocked. Track its
+      // real outcome instead of swallowing failures silently, so a system
+      // notification that never actually reaches the shade is reported
+      // honestly rather than showing a false "success".
       try {
         const sw = await navigator.serviceWorker.ready;
         await sw.showNotification("🎧 Test briefing ready", {
@@ -260,8 +264,25 @@ export default function Delivery() {
           tag: "leora-test",
           data: { click_action: clickUrl },
         });
+        // showNotification() resolving only means Chrome accepted the call —
+        // it does NOT guarantee Android actually rendered it in the shade
+        // (that's an OS-level decision JS has no visibility into). Confirm
+        // Chrome at least still lists it a moment later as a sanity check.
+        await new Promise((r) => setTimeout(r, 300));
+        const posted = await sw.getNotifications({ tag: "leora-test" });
+        if (posted.length === 0) {
+          setInappTestError(
+            "The system notification didn't register — Android is likely blocking it at the OS level (see the panel below)."
+          );
+        } else {
+          setInappTestSent(true);
+          setTimeout(() => setInappTestSent(false), 5000);
+        }
       } catch (notifErr) {
         console.warn("[inapp-test] direct SW notification failed:", notifErr);
+        setInappTestError(
+          "Couldn't post a system notification — check that notifications are allowed for this browser at the OS level."
+        );
       }
     } catch {
       setInappTestError("Network error — try again.");
@@ -526,6 +547,16 @@ export default function Delivery() {
                   </button>
                   {inappTestError && (
                     <div style={{ fontSize: "0.76rem", color: "var(--danger)", marginTop: 8 }}>{inappTestError}</div>
+                  )}
+                  {notifOs === "android" && (
+                    <div style={{ fontSize: "0.72rem", color: "var(--ink-4)", marginTop: 10, lineHeight: 1.55 }}>
+                      💡 This toggle only controls the browser-level permission. Android has a
+                      separate, OS-level per-app notification switch that decides whether anything
+                      actually reaches the notification shade — open the browser menu and tap{" "}
+                      <strong>Install app</strong> (or <strong>Add to Home screen</strong>) so Android
+                      gives Leora its own proper notification permission, then confirm it&apos;s on
+                      under Settings → Notifications → Leora.
+                    </div>
                   )}
                 </div>
               )}
