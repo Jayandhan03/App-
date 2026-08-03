@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ThemeToggle from "@/components/ThemeToggle";
 import Logo from "@/components/Logo";
 
@@ -19,11 +19,26 @@ export default function AppNav() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const isActive = (href: string) => {
     const base = href.split("#")[0];
     return pathname === base;
   };
+
+  // Click-outside-to-close. Previously this used onBlur + a setTimeout,
+  // which raced against clicks on menu items (e.g. "Sign out") — the menu
+  // could unmount before the click on its own contents registered.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [menuOpen]);
 
   return (
     <header
@@ -71,10 +86,9 @@ export default function AppNav() {
               {mobileOpen ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
             </svg>
           </button>
-          <div style={{ position: "relative" }}>
+          <div style={{ position: "relative" }} ref={menuRef}>
             <button
               onClick={() => setMenuOpen(o => !o)}
-              onBlur={() => setTimeout(() => setMenuOpen(false), 120)}
               className="row"
               style={{
                 gap: 8, height: 34, padding: "0 8px 0 8px", borderRadius: "var(--r-full)",
