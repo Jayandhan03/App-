@@ -213,7 +213,7 @@ export default function Landing() {
               </svg>
             </button>
             {session ? <Link href="/dashboard" className="btn btn-primary btn-sm">Open dashboard {I.arrow()}</Link> : (
-              <><Link href="/signin" className="nav-link nav-links-desktop" style={{ padding: "0 6px" }}>Sign in</Link><button onClick={go} className="btn btn-primary btn-sm">Deploy an agent</button></>
+              <><Link href="/signin" className="nav-link nav-links-desktop" style={{ padding: "0 6px" }}>Sign in</Link><a href="#downloads" className="nav-link nav-links-desktop" style={{ padding: "0 6px", color: "var(--accent)", fontWeight: 600 }}>&#8595; Get app</a><button onClick={go} className="btn btn-primary btn-sm">Deploy an agent</button></>
             )}
           </div>
         </div>
@@ -446,6 +446,143 @@ export default function Landing() {
           </div>
         </section>
 
+        {/* ══ DOWNLOADS ══ */}
+        <section id="downloads" className="section" style={{ background: "var(--bg)", borderTop: "1px solid var(--line)", borderBottom: "1px solid var(--line)", scrollMarginTop: 64 }}>
+          <div className="container">
+            <Reveal>
+              <div style={{ textAlign: "center", maxWidth: 600, margin: "0 auto 56px" }}>
+                <div className="eyebrow no-rule" style={{ justifyContent: "center", marginBottom: 18 }}>Apps &amp; downloads</div>
+                <h2 className="t-h2" style={{ marginBottom: 14 }}>
+                  Leora in your pocket.<br />
+                  <span className="serif" style={{ fontSize: "1.04em", color: "var(--accent)" }}>On every device.</span>
+                </h2>
+                <p className="t-lead">Your voice briefings, wherever you are. Download the Android app now — desktop is on its way.</p>
+              </div>
+            </Reveal>
+
+            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24, maxWidth: 900, margin: "0 auto" }}>
+
+              {/* Android card */}
+              <Reveal delay={0}>
+                <div className="card" style={{ padding: 0, overflow: "hidden", border: "1px solid var(--accent-line)", boxShadow: "var(--shadow-glow)", borderRadius: "var(--r-xl)", height: "100%", display: "flex", flexDirection: "column" }}>
+                  <div style={{ height: 4, background: "linear-gradient(90deg, var(--accent), #0BD9AA)" }} />
+                  <div style={{ padding: "28px 28px 30px", display: "flex", flexDirection: "column", flex: 1 }}>
+                    <div className="row" style={{ gap: 14, marginBottom: 20 }}>
+                      <span style={{ width: 50, height: 50, borderRadius: "var(--r-md)", background: "linear-gradient(135deg,#3DDC84,#0BA678)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="#fff"><path d="M6 18c0 .55.45 1 1 1h1v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V19h2v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V19h1c.55 0 1-.45 1-1V8H6v10zM3.5 8C2.67 8 2 8.67 2 9.5v7c0 .83.67 1.5 1.5 1.5S5 17.33 5 16.5v-7C5 8.67 4.33 8 3.5 8zm17 0c-.83 0-1.5.67-1.5 1.5v7c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5v-7c0-.83-.67-1.5-1.5-1.5zm-4.97-5.84l1.3-1.3c.2-.2.2-.51 0-.71-.2-.2-.51-.2-.71 0l-1.48 1.48A5.84 5.84 0 0 0 12 1.5c-.96 0-1.86.25-2.66.13L7.88.15c-.2-.2-.51-.2-.71 0-.2.2-.2.51 0 .71l1.31 1.31A5.983 5.983 0 0 0 6 7h12a5.983 5.983 0 0 0-2.47-4.84zM10 5H9V4h1v1zm5 0h-1V4h1v1z"/></svg>
+                      </span>
+                      <div>
+                        <div style={{ fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--accent)", marginBottom: 3 }}>Android</div>
+                        <div style={{ fontSize: "1.1rem", fontWeight: 700, letterSpacing: "-0.02em" }}>Leora for Android</div>
+                      </div>
+                    </div>
+
+                    <div className="row" style={{ gap: 0, marginBottom: 20, padding: "9px 12px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line)" }}>
+                      {[{ l: "Version", v: "v1.2" }, { l: "Size", v: "4.6 MB" }, { l: "Format", v: ".apk" }].map((x, i) => (
+                        <div key={i} style={{ flex: 1, textAlign: "center", borderLeft: i ? "1px solid var(--line)" : "none", paddingLeft: i ? 12 : 0 }}>
+                          <div style={{ fontSize: "0.67rem", color: "var(--ink-3)", marginBottom: 2 }}>{x.l}</div>
+                          <div style={{ fontSize: "0.86rem", fontWeight: 650 }}>{x.v}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <ul style={{ listStyle: "none", marginBottom: 20, display: "flex", flexDirection: "column", gap: 9, flex: 1 }}>
+                      {["Voice-note briefings anywhere", "Firebase push notifications", "Telegram & WhatsApp links", "Android 8.0+ (API 26+)"].map(f => (
+                        <li key={f} className="row" style={{ gap: 9, fontSize: "0.84rem", color: "var(--ink-2)" }}>
+                          <span style={{ width: 18, height: 18, borderRadius: "50%", background: "var(--accent-soft)", color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{I.check()}</span>
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+
+                    <div style={{ fontSize: "0.73rem", color: "var(--warn)", background: "var(--warn-soft)", border: "1px solid rgba(180,121,27,0.18)", borderRadius: "var(--r-sm)", padding: "8px 12px", marginBottom: 16, lineHeight: 1.5 }}>
+                      <strong>Sideload note:</strong> Enable <em>Install unknown apps</em> in Android settings first.
+                    </div>
+
+                    <a
+                      href="/downloads/leora-v1.2.apk"
+                      download="leora-v1.2.apk"
+                      className="btn btn-primary"
+                      style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 9, height: 46, fontSize: "0.9rem", borderRadius: "var(--r-md)", boxShadow: "0 4px 20px var(--accent-glow)" }}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      Download APK · v1.2
+                    </a>
+                    <div style={{ textAlign: "center", marginTop: 9, fontSize: "0.7rem", color: "var(--ink-4)" }}>Free · No account required</div>
+                  </div>
+                </div>
+              </Reveal>
+
+              {/* Desktop card */}
+              <Reveal delay={110}>
+                <div className="card" style={{ padding: 0, overflow: "hidden", borderRadius: "var(--r-xl)", height: "100%", display: "flex", flexDirection: "column", opacity: 0.88, position: "relative" }}>
+                  <div style={{ height: 4, background: "linear-gradient(90deg, var(--ink-4), var(--ink-3))" }} />
+                  <span style={{ position: "absolute", top: 16, right: 16, fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--ink-3)", background: "var(--surface-2)", border: "1px solid var(--line-2)", borderRadius: "var(--r-full)", padding: "3px 9px" }}>Coming soon</span>
+                  <div style={{ padding: "28px 28px 30px", display: "flex", flexDirection: "column", flex: 1 }}>
+                    <div className="row" style={{ gap: 14, marginBottom: 20 }}>
+                      <span style={{ width: 50, height: 50, borderRadius: "var(--r-md)", background: "var(--surface-3)", border: "1px solid var(--line-2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <svg width="23" height="23" viewBox="0 0 24 24" fill="var(--ink-3)"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+                      </span>
+                      <div>
+                        <div style={{ fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--ink-3)", marginBottom: 3 }}>Windows · macOS</div>
+                        <div style={{ fontSize: "1.1rem", fontWeight: 700, letterSpacing: "-0.02em" }}>Leora Desktop</div>
+                      </div>
+                    </div>
+
+                    <div className="row" style={{ gap: 0, marginBottom: 20, padding: "9px 12px", background: "var(--surface-2)", borderRadius: "var(--r-sm)", border: "1px solid var(--line)" }}>
+                      {[{ l: "Version", v: "Soon" }, { l: "Platform", v: "Win / Mac" }, { l: "Format", v: ".exe / .dmg" }].map((x, i) => (
+                        <div key={i} style={{ flex: 1, textAlign: "center", borderLeft: i ? "1px solid var(--line)" : "none", paddingLeft: i ? 12 : 0 }}>
+                          <div style={{ fontSize: "0.67rem", color: "var(--ink-3)", marginBottom: 2 }}>{x.l}</div>
+                          <div style={{ fontSize: "0.86rem", fontWeight: 650, color: "var(--ink-3)" }}>{x.v}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <ul style={{ listStyle: "none", marginBottom: 20, display: "flex", flexDirection: "column", gap: 9, flex: 1 }}>
+                      {["Native Windows & macOS app", "System-tray quick access", "Background agent sync", "Auto-update on launch"].map(f => (
+                        <li key={f} className="row" style={{ gap: 9, fontSize: "0.84rem", color: "var(--ink-3)" }}>
+                          <span style={{ width: 18, height: 18, borderRadius: "50%", background: "var(--surface-3)", color: "var(--ink-4)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{I.check()}</span>
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+
+                    <div style={{ height: 37, marginBottom: 16 }} />
+
+                    <button
+                      disabled
+                      className="btn btn-secondary"
+                      style={{ width: "100%", height: 46, fontSize: "0.9rem", borderRadius: "var(--r-md)", cursor: "not-allowed", opacity: 0.55, display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                      Notify me when it&apos;s ready
+                    </button>
+                    <div style={{ textAlign: "center", marginTop: 9, fontSize: "0.7rem", color: "var(--ink-4)" }}>.exe &amp; .dmg · auto-updater included</div>
+                  </div>
+                </div>
+              </Reveal>
+            </div>
+
+            {/* stat strip */}
+            <Reveal delay={180}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(155px, 1fr))", gap: 1, marginTop: 44, background: "var(--line)", borderRadius: "var(--r-lg)", overflow: "hidden", border: "1px solid var(--line)", maxWidth: 900, margin: "44px auto 0" }}>
+                {[
+                  { icon: "📱", label: "Android 8.0+", sub: "API level 26 and above" },
+                  { icon: "🖥", label: "Desktop soon", sub: "Windows & macOS" },
+                  { icon: "🆓", label: "Free to download", sub: "No credit card needed" },
+                  { icon: "🔒", label: "No ads, ever", sub: "Private & clean" },
+                ].map(s => (
+                  <div key={s.label} style={{ background: "var(--surface)", padding: "18px 14px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 5 }}>
+                    <span style={{ fontSize: "1.25rem" }}>{s.icon}</span>
+                    <div style={{ fontSize: "0.84rem", fontWeight: 650, letterSpacing: "-0.01em" }}>{s.label}</div>
+                    <div style={{ fontSize: "0.7rem", color: "var(--ink-3)" }}>{s.sub}</div>
+                  </div>
+                ))}
+              </div>
+            </Reveal>
+          </div>
+        </section>
+
         {/* ══ FAQ ══ */}
         <section id="faq" className="section container" style={{ scrollMarginTop: 64 }}>
           <div style={{ maxWidth: 760, margin: "0 auto" }}>
@@ -511,6 +648,7 @@ export default function Landing() {
             <div className="row wrap" style={{ gap: 56, alignItems: "flex-start" }}>
               {[
                 { h: "Product", links: [["How it works", "#how"], ["Your agents", "#design"], ["Pricing", "#pricing"], ["FAQ", "#faq"]] },
+                { h: "Downloads", links: [["Android APK v1.2", "/downloads/leora-v1.2.apk"], ["Desktop (soon)", "/get-leora"], ["All downloads", "/get-leora"]] },
                 { h: "Company", links: [["About", "#"], ["Blog", "#"], ["Careers", "#"], ["Contact", "#"]] },
                 { h: "Legal", links: [["Privacy", "#"], ["Terms", "#"], ["Security", "#"]] },
               ].map(col => (
