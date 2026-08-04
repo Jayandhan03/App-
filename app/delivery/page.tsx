@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import AppNav from "@/components/AppNav";
 import { useNotificationToggle } from "@/lib/push";
 import { isNativeApp } from "@/lib/capacitor";
+import Logo from "@/components/Logo";
 
 function TgIcon({ size = 20, color = "#fff" }: { size?: number; color?: string }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill={color}><path d="M20.665 3.717l-17.73 6.837c-1.21.486-1.203 1.161-.222 1.462l4.552 1.42 10.532-6.645c.498-.303.953-.14.579.192l-8.533 7.701-.314 4.692c.46 0 .663-.211.921-.46l2.211-2.15 4.599 3.397c.848.467 1.457.227 1.668-.787l3.019-14.228c.309-1.239-.473-1.8-1.282-1.432z" /></svg>;
@@ -282,9 +283,20 @@ export default function Delivery() {
         await new Promise((r) => setTimeout(r, 300));
         const posted = await sw.getNotifications({ tag: "leora-test" });
         if (posted.length === 0) {
-          setInappTestError(
-            "The system notification didn't register — Android is likely blocking it at the OS level (see the panel below)."
-          );
+          const hint =
+            notifOs === "windows"
+              ? "Windows is likely blocking it — check Windows Settings → Notifications → Chrome is on, and that Focus Assist is off."
+              : notifOs === "mac"
+              ? "macOS is likely blocking it — check System Settings → Notifications → Chrome."
+              : notifOs === "android"
+              ? "Android is likely blocking it at the OS level (see the panel below)."
+              : "Your OS is likely blocking it — check your system notification settings for this browser.";
+          setInappTestError(`The system notification didn't register — ${hint}`);
+          // Re-run the OS probe so the "System notifications are blocked"
+          // panel (with its OS-specific fix button) actually reflects this
+          // failure, instead of leaving the error text pointing at a panel
+          // that may still be hidden from an earlier successful probe.
+          recheckNotifOs();
         } else {
           setInappTestSent(true);
           setTimeout(() => setInappTestSent(false), 5000);
@@ -387,7 +399,11 @@ export default function Delivery() {
             borderTop: "1px solid var(--line, #eee)",
             fontSize: "0.72rem", color: "var(--ink-4, #999)", lineHeight: 1.5,
           }}>
-            💡 If no system pop-up appeared: check <strong>Windows → Settings → Notifications → Chrome</strong> is on, and <strong>Focus Assist</strong> is off.
+            💡 If no system pop-up appeared: {notifOs === "mac"
+              ? <>check <strong>System Settings → Notifications → Chrome</strong> is on.</>
+              : notifOs === "android"
+              ? <>check <strong>Android Settings → Notifications → Leora</strong> is on.</>
+              : <>check <strong>Windows → Settings → Notifications → Chrome</strong> is on, and <strong>Focus Assist</strong> is off.</>}
           </div>
         </div>
       )}
@@ -412,7 +428,7 @@ export default function Delivery() {
             <div className="card card-interactive" style={{ padding: 22 }}>
               <div className="row between wrap" style={{ gap: 10 }}>
                 <div className="row" style={{ gap: 13 }}>
-                  <span className="row center" style={{ width: 44, height: 44, borderRadius: "var(--r-md)", background: "var(--solid)", color: "var(--solid-ink)", flexShrink: 0 }}><AppIcon size={22} /></span>
+                  <Logo size={44} />
                   <div>
                     <div style={{ fontSize: "1rem", fontWeight: 600, letterSpacing: "-0.02em" }}>In the Leora app</div>
                     <div style={{ fontSize: "0.8rem", color: "var(--ink-3)" }}>Turn on in-app notifications here</div>
