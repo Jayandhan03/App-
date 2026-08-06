@@ -144,7 +144,7 @@ export function timezoneLabel(timeZone: string, refDate: Date = new Date()): str
   return `${timeZone.replace(/_/g, " ")}${offset ? ` (${offset})` : ""}`;
 }
 
-/** "Today at 8:00 AM (in 3h 12m)" — a concrete, unambiguous next-delivery preview. */
+/** "Today at 8:00 AM" — a concrete, unambiguous next-delivery preview. */
 export function describeNextRun(next: Date, timeZone: string, now: Date = new Date()): string {
   const time = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", timeZone }).format(next);
   const nextParts = zonedParts(next, timeZone);
@@ -158,12 +158,7 @@ export function describeNextRun(next: Date, timeZone: string, now: Date = new Da
       ? "Tomorrow"
       : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", timeZone }).format(next);
 
-  const mins = Math.max(0, Math.round((next.getTime() - now.getTime()) / 60_000));
-  const hrs = Math.floor(mins / 60);
-  const remMins = mins % 60;
-  const countdown = hrs > 0 ? `in ${hrs}h ${remMins}m` : `in ${remMins}m`;
-
-  return `${dayLabel} at ${time} (${countdown})`;
+  return `${dayLabel} at ${time}`;
 }
 
 /** A plain-English summary of when an agent will actually deliver, with the timezone spelled out. */

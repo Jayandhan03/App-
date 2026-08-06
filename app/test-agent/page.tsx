@@ -234,7 +234,7 @@ export default function CreateAgent() {
   useEffect(() => { const id = setInterval(() => setClockTick(t => t + 1), 60_000); return () => clearInterval(id); }, []);
 
   const nextRunText = useMemo(() => {
-    const next = computeNextRunAt({ frequency: cadence.label, intervalMinutes: cadence.intervalMinutes, times, weekday, timezone, startDate });
+    const next = computeNextRunAt({ frequency: cadence.label, intervalMinutes: cadence.intervalMinutes, times, weekday: cadence.needsWeekday ? weekday : null, timezone, startDate });
     return describeNextRun(next, timezone);
   }, [cadence, times, weekday, timezone, startDate, clockTick]);
 
@@ -605,12 +605,13 @@ export default function CreateAgent() {
               </p>
 
               {/* Next-run — a concrete, unmissable payoff */}
-              <div className="row" style={{ gap: 12, marginTop: 14, padding: "14px 18px", borderRadius: "var(--r-md)", background: "var(--accent-soft)", border: "1px solid var(--accent-line)" }}>
-                <span style={{ fontSize: "1.15rem" }}>🔔</span>
-                <div>
-                  <div style={{ fontSize: "0.66rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--accent-ink)", opacity: 0.85 }}>Next voice note</div>
-                  <div style={{ fontSize: "0.92rem", fontWeight: 600, color: "var(--accent-ink)" }}>{nextRunText}</div>
-                </div>
+              <div className="row" style={{ gap: 10, marginTop: 14, padding: "12px 16px", borderRadius: "var(--r-md)", background: "var(--accent-soft)", border: "1px solid var(--accent-line)", alignItems: "center" }}>
+                <span style={{ fontSize: "1.05rem", flexShrink: 0 }}>🔔</span>
+                <span style={{ fontSize: "0.85rem", color: "var(--accent-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <span style={{ fontWeight: 600, opacity: 0.85 }}>Next voice note</span>
+                  <span style={{ opacity: 0.45, margin: "0 7px" }}>·</span>
+                  <span style={{ fontWeight: 700 }}>{nextRunText}</span>
+                </span>
               </div>
             </Step>
 
@@ -690,12 +691,13 @@ export default function CreateAgent() {
                 </span>
               </div>
 
-              <div className="row" style={{ gap: 10, padding: "13px 16px", borderRadius: "var(--r-md)", background: "var(--accent-soft)", border: "1px solid var(--accent-line)", marginBottom: 22 }}>
-                <span style={{ fontSize: "1.15rem" }}>🔔</span>
-                <div>
-                  <div style={{ fontSize: "0.64rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--accent-ink)", opacity: 0.85 }}>Next voice note</div>
-                  <div style={{ fontSize: "0.92rem", fontWeight: 600, color: "var(--accent-ink)" }}>{nextRunText}</div>
-                </div>
+              <div className="row" style={{ gap: 10, padding: "12px 16px", borderRadius: "var(--r-md)", background: "var(--accent-soft)", border: "1px solid var(--accent-line)", marginBottom: 22, alignItems: "center" }}>
+                <span style={{ fontSize: "1.05rem", flexShrink: 0 }}>🔔</span>
+                <span style={{ fontSize: "0.85rem", color: "var(--accent-ink)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <span style={{ fontWeight: 600, opacity: 0.85 }}>Next voice note</span>
+                  <span style={{ opacity: 0.45, margin: "0 7px" }}>·</span>
+                  <span style={{ fontWeight: 700 }}>{nextRunText}</span>
+                </span>
               </div>
 
               <button onClick={handleDeploy} disabled={deploying || !topic.trim() || !agentName.trim() || !hasDeliveryChannel} className="btn btn-primary btn-lg" style={{ width: "100%" }}>
