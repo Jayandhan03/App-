@@ -5,7 +5,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import AgentModel, { IAgent } from "@/models/Agent";
 import TelegramLink from "@/models/TelegramLink";
 import WhatsAppLink from "@/models/WhatsAppLink";
-import { LANGUAGE_CODES } from "@/lib/agentConstants";
+import { LANGUAGE_CODES, DATA_WINDOWS } from "@/lib/agentConstants";
 import { computeNextRunAt } from "@/lib/schedule";
 
 export type AgentPersonality = {
@@ -53,6 +53,7 @@ export type Agent = {
   corePrompt: string;
   /** Plain-English summary of corePrompt, shown back to the user as "what this agent will deliver". */
   onboardingSummary: string;
+  dataWindow: string;
   personality: AgentPersonality;
   platforms: AgentPlatform[];
   schedule: AgentSchedule;
@@ -73,6 +74,7 @@ export function toClientShape(doc: any): Agent {
     region: doc.region ?? "Global",
     corePrompt: doc.corePrompt ?? "",
     onboardingSummary: doc.onboardingSummary ?? "",
+    dataWindow: doc.dataWindow ?? "1d",
     personality: {
       voice: doc.personality?.voice ?? "Analytical",
       language: doc.personality?.language ?? "English",
@@ -150,6 +152,8 @@ export async function POST(req: Request) {
     const startDate = typeof body.startDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.startDate) ? body.startDate : null;
     const scheduleEnabled = body.scheduleEnabled !== false;
 
+    const dataWindow = DATA_WINDOWS.some(w => w.value === body.dataWindow) ? body.dataWindow : "1d";
+
     // Never trust client-supplied connection state — derive delivery from the real links.
     const [tgLink, waLink] = await Promise.all([
       TelegramLink.findOne({ email: session.user.email }).lean(),
@@ -190,6 +194,7 @@ export async function POST(req: Request) {
       corePrompt,
       onboardingSummary,
       articleLimit: Number.isFinite(body.articleLimit) ? Math.min(20, Math.max(1, Math.round(body.articleLimit))) : 5,
+      dataWindow,
       personality: { voice, language, languageCode, toneSummary: "" },
       platforms,
       schedule: {

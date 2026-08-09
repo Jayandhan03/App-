@@ -54,6 +54,8 @@ export interface IAgent extends Document {
   /** Plain-English summary of corePrompt, shown back to the user as "what this agent will deliver". */
   onboardingSummary: string;
   articleLimit: number;
+  /** How far back this agent's news search looks: anytime | 1h | 1d | 7d | 1y. */
+  dataWindow: string;
   personality: IAgentPersonality;
   platforms: IAgentPlatform[];
   schedule: IAgentSchedule;
@@ -76,6 +78,7 @@ const AgentSchema = new Schema<IAgent>(
     keywords: { type: [String], default: [] },
     region: { type: String, default: "Global" },
     articleLimit: { type: Number, default: 5 },
+    dataWindow: { type: String, enum: ["anytime", "1h", "1d", "7d", "1y"], default: "1d" },
     corePrompt: { type: String, default: "" },
     onboardingSummary: { type: String, default: "" },
     personality: {

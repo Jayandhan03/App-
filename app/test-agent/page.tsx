@@ -10,7 +10,7 @@ import AgentOnboardingChat, { LockedTopic } from "@/components/AgentOnboardingCh
 import SavedTopicPicker, { SavedTopicShape } from "@/components/SavedTopicPicker";
 import TimePicker from "@/components/TimePicker";
 import DatePicker from "@/components/DatePicker";
-import { CADENCES } from "@/lib/agentConstants";
+import { CADENCES, DATA_WINDOWS, bestCadencesForWindow } from "@/lib/agentConstants";
 import { useNotificationToggle } from "@/lib/push";
 import { WEEKDAYS, describeSchedule, describeNextRun, timezoneLabel, computeNextRunAt, detectTimezone, listTimezones, todayInZone } from "@/lib/schedule";
 
@@ -117,6 +117,7 @@ export default function CreateAgent() {
   const [error, setError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
+  const [dataWindow, setDataWindow] = useState("1d");
   const [lang, setLang] = useState("en");
   const [tone, setTone] = useState("Analytical");
   const [voiceLoading, setVoiceLoading] = useState(false);
@@ -135,6 +136,20 @@ export default function CreateAgent() {
   // different date — otherwise switching timezone could leave it in the past.
   const [startDateTouched, setStartDateTouched] = useState(false);
   useEffect(() => { if (!startDateTouched) setStartDate(todayStr); }, [todayStr, startDateTouched]);
+
+  // The cadence list shown in step 5 is filtered down to whatever's apt for the
+  // chosen lookback window (step 2) — if switching the window drops the current
+  // cadence off that list, fall back to the first one that's still valid.
+  useEffect(() => {
+    const apt = bestCadencesForWindow(dataWindow);
+    if (apt.length && !apt.includes(cadence.label)) {
+      const next = CADENCES.find(c => apt.includes(c.label)) ?? cadence;
+      setCadence(next);
+      setTimes(next.defaultTimes);
+      if (next.needsWeekday && weekday == null) setWeekday(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataWindow]);
 
   const [tgConnected, setTgConnected] = useState(false);
   const [tgSending, setTgSending] = useState(false);
@@ -220,6 +235,7 @@ export default function CreateAgent() {
 
   const isLoading = step > 0 && step < 4;
   const langLabel = (LANGS.find(x => x.code === lang) ?? LANGS[0]).label;
+  const bestCadences = bestCadencesForWindow(dataWindow);
   // The in-app inbox is always on, so every agent always has somewhere to
   // deliver — Telegram/WhatsApp are optional extras, never required to deploy.
   const hasDeliveryChannel = true;
@@ -245,7 +261,7 @@ export default function CreateAgent() {
     try {
       const t1 = setTimeout(() => setStep(2), 3000);
       const t2 = setTimeout(() => setStep(3), 8000);
-      const res = await fetch("/api/news-audio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic: q, limit: 5, language: langLabel, tone }) });
+      const res = await fetch("/api/news-audio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic: q, limit: 5, time_published: dataWindow, language: langLabel, tone }) });
       clearTimeout(t1); clearTimeout(t2);
       if (!res.ok) { const err = await res.json().catch(() => ({ error: "Unknown error" })); setError(err.error ?? "Generation failed. Please try again."); setStep(0); return; }
       const blob = await res.blob();
@@ -324,6 +340,7 @@ export default function CreateAgent() {
         body: JSON.stringify({
           name,
           topic: q,
+          dataWindow,
           language: langLabel,
           voice: tone,
           frequency: cadence.label,
@@ -433,8 +450,22 @@ export default function CreateAgent() {
               </div>
             </Step>
 
-            {/* ── 2 · Voice & language ──────────────────────────── */}
-            <Step n={2} icon="🎙️" title="Voice & language">
+            {/* ── 2 · Data lookback window ───────────────────────── */}
+            <Step n={2} icon="🕰️" title="How far back should it look?">
+              <div className="row wrap" style={{ gap: 8 }}>
+                {DATA_WINDOWS.map(w => (
+                  <button key={w.value} type="button" disabled={isLoading} onClick={() => setDataWindow(w.value)} style={chip(dataWindow === w.value)}>
+                    <span style={{ marginRight: 6 }}>{w.icon}</span>{w.label}
+                  </button>
+                ))}
+              </div>
+              <p className="t-muted" style={{ fontSize: "0.8rem", marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
+                {DATA_WINDOWS.find(w => w.value === dataWindow)?.blurb}
+              </p>
+            </Step>
+
+            {/* ── 3 · Voice & language ──────────────────────────── */}
+            <Step n={3} icon="🎙️" title="Voice & language">
               <div style={{ fontSize: "0.72rem", fontWeight: 600, color: "var(--ink-3)", marginBottom: 10 }}>LANGUAGE</div>
               <div className="row wrap" style={{ gap: 8 }}>
                 {LANGS.map(l => <button key={l.code} type="button" disabled={isLoading} onClick={() => setLang(l.code)} style={chip(lang === l.code)}>{l.label}</button>)}
@@ -453,8 +484,8 @@ export default function CreateAgent() {
               </div>
             </Step>
 
-            {/* ── 3 · Preview ───────────────────────────────────── */}
-            <Step n={3} icon="🎧" title="Preview a briefing">
+            {/* ── 4 · Preview ───────────────────────────────────── */}
+            <Step n={4} icon="🎧" title="Preview a briefing">
               <button onClick={handleGenerate} disabled={isLoading || !topic.trim()} className="btn btn-secondary" style={{ width: "100%" }}>
                 {isLoading ? <><span className="spinner" style={{ width: 15, height: 15 }} /> Working…</> : "▶ Preview a briefing"}
               </button>
@@ -514,10 +545,10 @@ export default function CreateAgent() {
               )}
             </Step>
 
-            {/* ── 4 · Delivery schedule ─────────────────────────── */}
-            <Step n={4} icon="🗓️" title="Delivery schedule">
+            {/* ── 5 · Delivery schedule ─────────────────────────── */}
+            <Step n={5} icon="🗓️" title="Delivery schedule">
               <div className="row wrap" style={{ gap: 8 }}>
-                {CADENCES.map(c => (
+                {CADENCES.filter(c => bestCadences.includes(c.label)).map(c => (
                   <button key={c.label} type="button" onClick={() => { setCadence(c); setTimes(c.defaultTimes); if (c.needsWeekday && weekday == null) setWeekday(1); }} style={chip(cadence.label === c.label)}>
                     <span style={{ marginRight: 6 }}>{c.icon}</span>{c.label}
                   </button>
@@ -615,8 +646,8 @@ export default function CreateAgent() {
               </div>
             </Step>
 
-            {/* ── 5 · Delivery channel ──────────────────────────── */}
-            <Step n={5} icon="📡" title="Delivery channel" last done={hasDeliveryChannel} extra={<span className="badge badge-muted" style={{ fontSize: "0.62rem" }}>In-app included</span>}>
+            {/* ── 6 · Delivery channel ──────────────────────────── */}
+            <Step n={6} icon="📡" title="Delivery channel" last done={hasDeliveryChannel} extra={<span className="badge badge-muted" style={{ fontSize: "0.62rem" }}>In-app included</span>}>
               <div className="col" style={{ gap: 8 }}>
                 {/* Telegram — the only channel actually wired up */}
                 {tgConnected ? (
@@ -684,6 +715,7 @@ export default function CreateAgent() {
 
               <div className="row wrap" style={{ gap: 8, marginBottom: 20 }}>
                 <span className="chip" style={{ background: "var(--surface-2)" }}>🔒 {locked ? locked.topic : "No topic yet"}</span>
+                <span className="chip" style={{ background: "var(--surface-2)" }}>{DATA_WINDOWS.find(w => w.value === dataWindow)?.icon} {DATA_WINDOWS.find(w => w.value === dataWindow)?.label}</span>
                 <span className="chip" style={{ background: "var(--surface-2)" }}>🎙️ {langLabel} · {tone}</span>
                 <span className="chip" style={{ background: "var(--surface-2)" }}>{cadence.icon} {cadence.label}</span>
                 <span className="chip" style={{ background: "var(--surface-2)" }}>
