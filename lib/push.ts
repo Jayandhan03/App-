@@ -179,6 +179,45 @@ function webPushSupported(): boolean {
   );
 }
 
+// Bound at most once per page load — callers (the enable flow, the test-
+// notification button) may all ask for it, but a second binding would leave
+// two listeners on the same Firebase Messaging instance, each showing the
+// same incoming push as a separate OS notification.
+let _foregroundHandlerBound = false;
+
+async function getWebMessaging() {
+  const { initializeApp, getApps } = await import("firebase/app");
+  const { getMessaging } = await import("firebase/messaging");
+  const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
+  return getMessaging(app);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function ensureForegroundHandler(messaging: any) {
+  if (_foregroundHandlerBound) return;
+  _foregroundHandlerBound = true;
+  const { onMessage } = await import("firebase/messaging");
+  onMessage(messaging, async (payload) => {
+    const title = payload.notification?.title ?? "Leora";
+    const body = payload.notification?.body ?? "New briefing ready.";
+    const data = (payload.data as Record<string, string>) ?? {};
+    try {
+      const sw = await navigator.serviceWorker.ready;
+      const options: NotificationOptions & { actions?: { action: string; title: string }[] } = {
+        body,
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
+        data,
+        ...(data.click_action ? { actions: [{ action: "play", title: "▶ Play" }] } : {}),
+      };
+      await sw.showNotification(title, options);
+    } catch {
+      if (Notification.permission === "granted")
+        new Notification(title, { body, icon: "/icon-192.png" });
+    }
+  });
+}
+
 async function enableWebPush(): Promise<boolean> {
   if (!webPushSupported()) return false;
 
@@ -204,11 +243,8 @@ async function enableWebPush(): Promise<boolean> {
   swReg = await navigator.serviceWorker.ready;
 
   // ── 3. Get FCM token tied to this SW registration ─────────────────────────
-  const { initializeApp, getApps } = await import("firebase/app");
-  const { getMessaging, getToken, onMessage } = await import("firebase/messaging");
-
-  const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
-  const messaging = getMessaging(app);
+  const { getToken } = await import("firebase/messaging");
+  const messaging = await getWebMessaging();
 
   const token = await getToken(messaging, {
     vapidKey: VAPID_KEY,
@@ -219,25 +255,7 @@ async function enableWebPush(): Promise<boolean> {
   await registerToken(token, "web");
 
   // ── 4. Foreground handler — use SW showNotification (Chrome-safe) ──────────
-  onMessage(messaging, async (payload) => {
-    const title = payload.notification?.title ?? "Leora";
-    const body = payload.notification?.body ?? "New briefing ready.";
-    const data = (payload.data as Record<string, string>) ?? {};
-    try {
-      const sw = await navigator.serviceWorker.ready;
-      const options: NotificationOptions & { actions?: { action: string; title: string }[] } = {
-        body,
-        icon: "/icon-192.png",
-        badge: "/icon-192.png",
-        data,
-        ...(data.click_action ? { actions: [{ action: "play", title: "▶ Play" }] } : {}),
-      };
-      await sw.showNotification(title, options);
-    } catch {
-      if (Notification.permission === "granted")
-        new Notification(title, { body, icon: "/icon-192.png" });
-    }
-  });
+  await ensureForegroundHandler(messaging);
 
   // ── 5. Probe OS-level delivery ─────────────────────────────────────────────
   // If the probe fails, the OS is blocking display. We auto-open OS settings
@@ -296,6 +314,51 @@ async function enableNativePush(): Promise<boolean> {
       resolve(false);
     });
   });
+}
+
+// ── Current-device token lookup ───────────────────────────────────────────────
+// Used by "send test notification" so the push targets only the device that
+// clicked the button, never every device the account is signed in on.
+
+async function getCurrentWebDeviceToken(): Promise<string | null> {
+  if (!webPushSupported()) return null;
+  try {
+    const swReg = await navigator.serviceWorker.ready;
+    const { getToken } = await import("firebase/messaging");
+    const messaging = await getWebMessaging();
+    await ensureForegroundHandler(messaging);
+    const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
+    return token || null;
+  } catch (err) {
+    console.warn("[push] getCurrentWebDeviceToken failed:", err);
+    return null;
+  }
+}
+
+async function getCurrentNativeDeviceToken(): Promise<string | null> {
+  try {
+    const { PushNotifications } = await import("@capacitor/push-notifications");
+    return await new Promise<string | null>((resolve) => {
+      let settled = false;
+      const finish = (v: string | null) => {
+        if (settled) return;
+        settled = true;
+        resolve(v);
+      };
+      PushNotifications.addListener("registration", (token) => finish(token.value));
+      PushNotifications.addListener("registrationError", () => finish(null));
+      PushNotifications.register().catch(() => finish(null));
+      setTimeout(() => finish(null), 5000);
+    });
+  } catch (err) {
+    console.warn("[push] getCurrentNativeDeviceToken failed:", err);
+    return null;
+  }
+}
+
+/** Live push token for whichever device this code is running on, or null if unavailable. */
+export async function getCurrentDeviceToken(): Promise<string | null> {
+  return isNativeApp() ? getCurrentNativeDeviceToken() : getCurrentWebDeviceToken();
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

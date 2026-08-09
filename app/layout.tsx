@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import SessionProvider from "@/components/SessionProvider";
 import PushNotificationBridge from "@/components/PushNotificationBridge";
+import BackgroundAudioPlayer from "@/components/BackgroundAudioPlayer";
 
 export const metadata: Metadata = {
   title: "Leora — Personal AI agents that brief you by voice",
@@ -64,6 +65,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <SessionProvider>
           <PushNotificationBridge />
+          <BackgroundAudioPlayer />
           {children}
         </SessionProvider>
       </body>

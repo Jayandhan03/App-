@@ -68,12 +68,37 @@ messaging.onBackgroundMessage((payload) => {
   });
 });
 
-// Tapping the notification body or the "▶ Play" action both land on the
-// same click_action URL — /test-briefing auto-plays the sample on load
-// either way, since a Service Worker can't play audio itself.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data?.click_action || "/dashboard";
+  const data = event.notification.data || {};
+  const url = data.click_action || "/dashboard";
+
+  // "▶ Play" action — a Service Worker can't output audio itself, but if a
+  // Leora tab is already open we can hand playback off to it in the
+  // background instead of navigating/focusing anything. The user stays
+  // exactly where they are; audio just starts.
+  if (event.action === "play" && data.audio_url) {
+    event.waitUntil(
+      self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+        const leoraClient = clientList.find((c) => c.url.includes(self.location.origin));
+        if (leoraClient) {
+          leoraClient.postMessage({
+            type: "PLAY_AUDIO",
+            url: data.audio_url,
+            title: event.notification.title,
+            body: event.notification.body,
+          });
+          return;
+        }
+        // No Leora tab open at all — there's nowhere to host an <audio>
+        // element, so a tab has to open (unavoidable platform limit).
+        return self.clients.openWindow(url);
+      })
+    );
+    return;
+  }
+
+  // Tapping the notification body → land on the click_action page as before.
   event.waitUntil(
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })
