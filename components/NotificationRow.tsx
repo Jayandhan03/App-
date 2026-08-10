@@ -13,43 +13,67 @@ export type NotificationListItem = {
   createdAt: string;
 };
 
+// Color-codes each notification type so the feed is scannable at a glance —
+// real briefings in the app's accent color, test pings in --info so they
+// read as distinctly "not a real delivery".
+const TYPE_META = {
+  briefing: { bg: "var(--accent-soft)", fg: "var(--accent-ink)", icon: I.mic },
+  test: { bg: "var(--info-soft)", fg: "var(--info)", icon: I.bolt },
+} as const;
+
 export default function NotificationRow({
   notification,
   onOpen,
+  index = 0,
 }: {
   notification: NotificationListItem;
   onOpen: (n: NotificationListItem) => void;
+  index?: number;
 }) {
-  const icon = notification.type === "briefing" ? I.mic() : I.bolt();
+  const meta = TYPE_META[notification.type];
 
   return (
     <button
       onClick={() => onOpen(notification)}
-      className="menu-row"
+      className="notif-row"
       style={{
-        display: "flex", alignItems: "flex-start", gap: 10, width: "100%",
-        textAlign: "left", background: notification.read ? "none" : "var(--accent-soft)",
-        border: "none", cursor: "pointer", padding: "9px 10px", borderRadius: "var(--r-sm)",
+        display: "flex", alignItems: "flex-start", gap: 12, width: "100%",
+        textAlign: "left", cursor: "pointer", border: "none",
+        padding: "11px 12px 11px 13px", borderRadius: "var(--r-sm)",
+        borderLeft: `3px solid ${notification.read ? "transparent" : "var(--accent)"}`,
+        background: notification.read ? "transparent" : "var(--accent-soft)",
+        animation: "riseSm 0.24s var(--ease) both",
+        animationDelay: `${Math.min(index, 10) * 0.025}s`,
       }}
     >
       <span
         className="row center"
-        style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--surface-2)", color: "var(--ink-2)", flexShrink: 0, marginTop: 1 }}
+        style={{ width: 34, height: 34, borderRadius: "50%", background: meta.bg, color: meta.fg, flexShrink: 0 }}
       >
-        {icon}
+        {meta.icon()}
       </span>
+
       <span style={{ flex: 1, minWidth: 0 }}>
-        <span className="row between" style={{ gap: 8 }}>
-          <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span className="row" style={{ gap: 8, justifyContent: "space-between" }}>
+          <span
+            style={{
+              fontSize: "0.84rem", fontWeight: notification.read ? 500 : 700, color: "var(--ink)",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}
+          >
             {notification.title}
           </span>
-          {!notification.read && <span className="dot" style={{ background: "var(--danger)", flexShrink: 0, marginTop: 4 }} />}
+          <span style={{ fontSize: "0.66rem", color: "var(--ink-4)", flexShrink: 0, whiteSpace: "nowrap", marginTop: 2 }}>
+            {formatElapsed(notification.createdAt)}
+          </span>
         </span>
-        <span style={{ display: "block", fontSize: "0.78rem", color: "var(--ink-3)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span
+          style={{
+            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+            fontSize: "0.78rem", color: "var(--ink-3)", marginTop: 3, lineHeight: 1.45,
+          }}
+        >
           {notification.body}
-        </span>
-        <span style={{ display: "block", fontSize: "0.68rem", color: "var(--ink-4)", marginTop: 3 }}>
-          {formatElapsed(notification.createdAt)}
         </span>
       </span>
     </button>

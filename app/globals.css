@@ -339,6 +339,9 @@ svg { max-width: none; }
   .mobile-menu[data-open="true"] { display: flex; }
 }
 
+.notif-row { transition: transform 0.15s var(--ease); }
+.notif-row:hover { transform: translateX(2px); }
+
 /* Menu rows (dropdowns) */
 .menu-row {
   display: block; padding: 9px 10px; border-radius: var(--r-xs);

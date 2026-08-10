@@ -30,9 +30,7 @@ function WaveformBars({ playing, progress }: { playing: boolean; progress: numbe
               width: 3,
               height: filled ? h : Math.max(4, h * 0.4),
               borderRadius: 2,
-              background: filled
-                ? "linear-gradient(180deg, #4d7fff, #8b5cf6)"
-                : "rgba(255,255,255,0.15)",
+              background: filled ? "var(--accent)" : "var(--line-2)",
               transition: "height 0.12s ease",
               animation:
                 playing && !filled
@@ -142,49 +140,15 @@ export default function TestBriefingPage() {
         }}
       >
         <div
+          className="card"
           style={{
             width: "100%",
             maxWidth: 500,
-            background:
-              "linear-gradient(160deg, rgba(77,127,255,0.09) 0%, rgba(139,92,246,0.06) 100%)",
-            border: "1px solid rgba(77,127,255,0.2)",
-            borderRadius: 28,
+            borderRadius: "var(--r-xl)",
             padding: "40px 36px",
-            backdropFilter: "blur(24px)",
-            boxShadow:
-              "0 0 80px rgba(77,127,255,0.12), 0 24px 60px rgba(0,0,0,0.28)",
-            position: "relative",
-            overflow: "hidden",
+            boxShadow: "var(--shadow-glow)",
           }}
         >
-          {/* Ambient glows */}
-          <div
-            style={{
-              position: "absolute",
-              top: -70,
-              right: -50,
-              width: 240,
-              height: 160,
-              borderRadius: "50%",
-              background: "rgba(139,92,246,0.16)",
-              filter: "blur(60px)",
-              pointerEvents: "none",
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              bottom: -50,
-              left: -40,
-              width: 200,
-              height: 140,
-              borderRadius: "50%",
-              background: "rgba(77,127,255,0.12)",
-              filter: "blur(50px)",
-              pointerEvents: "none",
-            }}
-          />
-
           {/* ── Header ── */}
           <div
             style={{
@@ -192,7 +156,6 @@ export default function TestBriefingPage() {
               alignItems: "center",
               gap: 14,
               marginBottom: 28,
-              position: "relative",
             }}
           >
             <div
@@ -201,11 +164,11 @@ export default function TestBriefingPage() {
                 height: 52,
                 borderRadius: 16,
                 flexShrink: 0,
-                background: "linear-gradient(135deg, #4d7fff, #8b5cf6)",
+                background: "var(--accent)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "0 8px 28px rgba(77,127,255,0.45)",
+                boxShadow: "0 8px 24px var(--accent-glow)",
                 fontSize: 24,
                 position: "relative",
               }}
@@ -217,7 +180,7 @@ export default function TestBriefingPage() {
                     position: "absolute",
                     inset: -1,
                     borderRadius: 17,
-                    border: "2px solid rgba(77,127,255,0.6)",
+                    border: "2px solid var(--accent-line)",
                     animation: "ring-pulse 1.5s ease-in-out infinite",
                   }}
                 />
@@ -239,39 +202,29 @@ export default function TestBriefingPage() {
                 Leora · Sample voice note
               </div>
             </div>
-            <div
-              style={{
-                marginLeft: "auto",
-                fontSize: "0.68rem",
-                fontWeight: 700,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                color: "#8b5cf6",
-                background: "rgba(139,92,246,0.12)",
-                border: "1px solid rgba(139,92,246,0.28)",
-                borderRadius: 999,
-                padding: "4px 11px",
-              }}
+            <span
+              className="badge badge-accent"
+              style={{ marginLeft: "auto", fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}
             >
               Test
-            </div>
+            </span>
           </div>
 
           {/* ── Script preview ── */}
           <div
             style={{
               padding: "14px 16px",
-              borderRadius: 14,
+              borderRadius: "var(--r-sm)",
               marginBottom: 24,
-              background: "rgba(255,255,255,0.03)",
-              border: "1px solid rgba(255,255,255,0.07)",
+              background: "var(--surface-2)",
+              border: "1px solid var(--line)",
             }}
           >
             <div
               style={{
                 fontSize: "0.7rem",
                 fontWeight: 700,
-                color: "#8b5cf6",
+                color: "var(--accent-ink)",
                 letterSpacing: "0.06em",
                 textTransform: "uppercase",
                 marginBottom: 8,
@@ -283,7 +236,7 @@ export default function TestBriefingPage() {
               style={{
                 margin: 0,
                 fontSize: "0.82rem",
-                color: "rgba(200,215,255,0.65)",
+                color: "var(--ink-2)",
                 lineHeight: 1.7,
                 fontStyle: "italic",
               }}
@@ -295,14 +248,15 @@ export default function TestBriefingPage() {
           {/* ── Audio player ── */}
           {error ? (
             <div
+              className="card"
               style={{
-                padding: "18px",
-                borderRadius: 14,
-                background: "rgba(239,68,68,0.08)",
-                border: "1px solid rgba(239,68,68,0.3)",
+                padding: "14px 16px",
+                background: "var(--danger-soft)",
+                borderColor: "var(--danger)",
+                boxShadow: "none",
                 textAlign: "center",
                 fontSize: "0.82rem",
-                color: "#ef4444",
+                color: "var(--danger)",
               }}
             >
               {error}
@@ -310,13 +264,10 @@ export default function TestBriefingPage() {
           ) : (
             <div
               style={{
-                borderRadius: 18,
-                background: playing
-                  ? "linear-gradient(135deg, rgba(77,127,255,0.18), rgba(139,92,246,0.14))"
-                  : "rgba(255,255,255,0.04)",
-                border: `1px solid ${playing ? "rgba(77,127,255,0.45)" : "rgba(255,255,255,0.1)"}`,
+                borderRadius: "var(--r-sm)",
+                background: playing ? "var(--accent-soft)" : "var(--surface-2)",
+                border: `1px solid ${playing ? "var(--accent-line)" : "var(--line)"}`,
                 padding: "20px 20px 16px",
-                boxShadow: playing ? "0 0 40px rgba(77,127,255,0.2)" : "none",
                 transition: "all 0.3s ease",
               }}
             >
@@ -337,16 +288,12 @@ export default function TestBriefingPage() {
                     borderRadius: "50%",
                     flexShrink: 0,
                     border: "none",
-                    background: playing
-                      ? "linear-gradient(135deg, #4d7fff, #8b5cf6)"
-                      : ended
-                      ? "rgba(52,211,153,0.25)"
-                      : "rgba(77,127,255,0.2)",
+                    background: "var(--accent)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     cursor: "pointer",
-                    boxShadow: playing ? "0 4px 22px rgba(77,127,255,0.55)" : "none",
+                    boxShadow: playing ? "0 4px 20px var(--accent-glow)" : "none",
                     transition: "all 0.2s ease",
                   }}
                 >
@@ -358,7 +305,7 @@ export default function TestBriefingPage() {
                     </svg>
                   ) : ended ? (
                     /* Replay */
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="#34d399" style={{ marginRight: 1 }}>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="#fff" style={{ marginRight: 1 }}>
                       <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
                     </svg>
                   ) : (
@@ -377,7 +324,7 @@ export default function TestBriefingPage() {
                 style={{
                   height: 4,
                   borderRadius: 4,
-                  background: "rgba(255,255,255,0.12)",
+                  background: "var(--line-2)",
                   cursor: "pointer",
                   position: "relative",
                   marginBottom: 8,
@@ -391,9 +338,7 @@ export default function TestBriefingPage() {
                     height: "100%",
                     borderRadius: 4,
                     width: `${progress * 100}%`,
-                    background: ended
-                      ? "linear-gradient(90deg, #34d399, #10b981)"
-                      : "linear-gradient(90deg, #4d7fff, #8b5cf6)",
+                    background: "var(--accent)",
                     transition: "width 0.12s linear",
                   }}
                 />
@@ -405,11 +350,11 @@ export default function TestBriefingPage() {
                   display: "flex",
                   justifyContent: "space-between",
                   fontSize: "0.7rem",
-                  color: "rgba(160,175,220,0.5)",
+                  color: "var(--ink-4)",
                 }}
               >
                 <span>{fmt(elapsed)}</span>
-                <span style={{ color: "rgba(160,175,220,0.32)" }}>
+                <span style={{ color: "var(--ink-4)" }}>
                   English · Analytical
                 </span>
                 <span>~{fmt(totalDuration)}</span>
@@ -423,11 +368,7 @@ export default function TestBriefingPage() {
               textAlign: "center",
               marginTop: 14,
               fontSize: "0.74rem",
-              color: ended
-                ? "#34d399"
-                : playing
-                ? "rgba(77,127,255,0.7)"
-                : "rgba(160,175,220,0.4)",
+              color: ended || playing ? "var(--accent-ink)" : "var(--ink-4)",
               transition: "color 0.3s ease",
               minHeight: 18,
             }}
