@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { connectToDatabase } from "@/lib/mongodb";
+import NotificationLog from "@/models/NotificationLog";
 
 // ── Firebase Admin singleton ──────────────────────────────────────────────────
 // Lazy-initialised so the import is a no-op if the env var isn't set yet.
@@ -102,6 +104,21 @@ export async function POST(req: NextRequest) {
     try {
       const msgId = await messaging.send({ token: deviceToken, notification, data, webpush, android });
       console.log("[inapp-test] sent to device token, messageId:", msgId);
+
+      // Best-effort — a logging failure must never fail the actual push send.
+      try {
+        await connectToDatabase();
+        await NotificationLog.create({
+          email: session.user.email.toLowerCase(),
+          title: notification.title,
+          body: notification.body,
+          type: "test",
+          data,
+        });
+      } catch (logErr: unknown) {
+        console.error("[inapp-test] failed to record notification log:", logErr);
+      }
+
       return NextResponse.json({ success: true, sent: 1, failed: 0 });
     } catch (sendErr: unknown) {
       const msg = sendErr instanceof Error ? sendErr.message : String(sendErr);

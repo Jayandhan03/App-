@@ -6,14 +6,14 @@ import { useSession, signOut } from "next-auth/react";
 import { useEffect, useRef, useState } from "react";
 import ThemeToggle from "@/components/ThemeToggle";
 import Logo from "@/components/Logo";
+import NotificationBell from "@/components/NotificationBell";
 
 const LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/delivery", label: "Delivery" },
   { href: "/test-agent", label: "Create agent" },
+  { href: "/get-leora", label: "Get Leora" },
 ];
-
-const DOWNLOAD_HREF = "/get-leora";
 
 /** Shared top navigation for the signed-in product surfaces. */
 export default function AppNav() {
@@ -76,32 +76,9 @@ export default function AppNav() {
         </nav>
 
         {/* Right */}
-        <div className="row" style={{ gap: 10 }}>
+        <div className="row" style={{ gap: 10, position: "relative" }}>
           <ThemeToggle />
-          <Link
-            href={DOWNLOAD_HREF}
-            className="home-nav-links"
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              height: 34, padding: "0 14px",
-              borderRadius: "var(--r-full)",
-              background: pathname === DOWNLOAD_HREF ? "var(--solid)" : "var(--solid)",
-              color: "var(--solid-ink)",
-              fontSize: "0.82rem", fontWeight: 600,
-              letterSpacing: "-0.01em",
-              whiteSpace: "nowrap",
-              transition: "opacity 0.18s var(--ease)",
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.opacity = "0.82"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.opacity = "1"; }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            Get Leora
-          </Link>
+          {session?.user?.email && <NotificationBell />}
           <button
             className="nav-burger"
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
@@ -169,10 +146,6 @@ export default function AppNav() {
             {l.label}
           </Link>
         ))}
-        <Link href="/get-leora" onClick={() => setMobileOpen(false)}
-          style={{ color: "var(--accent)", fontWeight: 650 }}>
-          ⬇ Get Leora
-        </Link>
       </nav>
     </header>
   );
