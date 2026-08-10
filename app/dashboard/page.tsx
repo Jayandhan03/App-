@@ -3,18 +3,19 @@
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Fragment, useEffect, useMemo, useState, useCallback } from "react";
+import { Fragment, useEffect, useMemo, useState, useCallback, useRef } from "react";
 import type { Agent } from "@/app/api/agents/route";
 import AppNav from "@/components/AppNav";
 import SavedTopicPicker, { SavedTopicShape } from "@/components/SavedTopicPicker";
 import TimePicker from "@/components/TimePicker";
 import BriefingHistoryPanel from "@/components/BriefingHistoryPanel";
+import Logo from "@/components/Logo";
 import { I } from "@/components/icons";
 import { formatElapsed } from "@/lib/format";
 import { VOICES, LANGUAGES, CADENCES } from "@/lib/agentConstants";
 import { WEEKDAYS, describeSchedule, describeNextRun, timezoneLabel, computeNextRunAt, detectTimezone, listTimezones } from "@/lib/schedule";
 
-type Field = "status" | "voice" | "language" | "cadence" | "channels";
+type Field = "status" | "voice" | "language" | "cadence" | "channels" | "actions";
 type MenuState = { id: string; field: Field; x: number; y: number } | null;
 
 /* Live "agent is working" verbs */
@@ -42,18 +43,6 @@ function EditChip({ children, active, onClick, accent }: { children: React.React
   );
 }
 
-function formatNext(iso?: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  const now = new Date();
-  const time = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  if (d.toDateString() === now.toDateString()) return `Today · ${time}`;
-  const tm = new Date(now); tm.setDate(now.getDate() + 1);
-  if (d.toDateString() === tm.toDateString()) return `Tomorrow · ${time}`;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
 function greeting(): string {
   const h = new Date().getHours();
   if (h < 5) return "Working late";
@@ -78,6 +67,9 @@ export default function Dashboard() {
   const [tzPickerOpen, setTzPickerOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const zoneOptions = useMemo(listTimezones, []);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const [tableScroll, setTableScroll] = useState({ left: false, right: false });
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { if (status === "unauthenticated") router.replace("/signin"); }, [status, router]);
 
@@ -98,11 +90,69 @@ export default function Dashboard() {
     if (!menu) return;
     const close = () => setMenu(null);
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenu(null);
+    // Click-outside-to-close, checked via containment against the popover's
+    // own ref (same idea as the account menu in AppNav) rather than a fixed
+    // wrapping container — this popover is one shared floating element used
+    // by many different row/field triggers, so there's no single element to
+    // wrap both "trigger + popover" together.
+    //
+    // Deliberately listens on "click" (bubble phase), not "mousedown": every
+    // trigger's own onClick already calls stopPropagation (see openMenu), so
+    // a genuine trigger click never reaches this document-level listener at
+    // all — only real "clicked elsewhere" clicks do. Using mousedown instead
+    // would fire before that trigger's click handler runs, closing the menu
+    // first and breaking "click the same trigger again to close it" (the
+    // click handler would then see a fresh, already-closed state and reopen
+    // instead of toggling closed).
+    const onOutsideClick = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) setMenu(null);
+    };
     window.addEventListener("resize", close);
     window.addEventListener("scroll", close, true);
     document.addEventListener("keydown", onKey);
-    return () => { window.removeEventListener("resize", close); window.removeEventListener("scroll", close, true); document.removeEventListener("keydown", onKey); };
+    document.addEventListener("click", onOutsideClick);
+    return () => {
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("click", onOutsideClick);
+    };
   }, [menu]);
+
+  // The agents table can be wider than its card (Voice/Language/Cadence/
+  // Delivery/Activity all need room), so it scrolls horizontally — but that
+  // wasn't discoverable: no visible affordance, and a vertical mouse wheel
+  // over the table did nothing. This tracks scroll position for the fade
+  // hints below and converts vertical wheel input into horizontal scroll
+  // while there's still table content in that direction (falls through to
+  // normal page scroll once the table has no more room to give).
+  useEffect(() => {
+    const el = tableScrollRef.current;
+    if (!el) return;
+    const update = () => setTableScroll({
+      left: el.scrollLeft > 4,
+      right: el.scrollLeft < el.scrollWidth - el.clientWidth - 4,
+    });
+    const onWheel = (e: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth) return;
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      const goingRight = e.deltaY > 0;
+      const atStart = el.scrollLeft <= 0;
+      const atEnd = el.scrollLeft >= el.scrollWidth - el.clientWidth - 1;
+      if ((goingRight && atEnd) || (!goingRight && atStart)) return;
+      el.scrollLeft += e.deltaY;
+      e.preventDefault();
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    el.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("resize", update);
+    return () => {
+      el.removeEventListener("scroll", update);
+      el.removeEventListener("wheel", onWheel);
+      window.removeEventListener("resize", update);
+    };
+  }, [agents]);
 
   // Applies the same fields the PATCH route accepts, so the UI reflects the
   // change the instant it's clicked instead of waiting on the round-trip.
@@ -171,7 +221,13 @@ export default function Dashboard() {
       setTzPickerOpen(false);
     }
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setMenu({ id, field, x: Math.min(r.left, window.innerWidth - 250), y: r.bottom + 6 });
+    const x = Math.min(r.left, window.innerWidth - 250);
+    // Leave at least ~280px of room below the popover's top edge so it never
+    // opens nearly invisible on a short viewport (e.g. the last table row on
+    // a phone-width window) — anything taller than the remaining room falls
+    // back to the popover's own max-height + scroll (see the .popover style below).
+    const y = Math.max(12, Math.min(r.bottom + 6, window.innerHeight - 280));
+    setMenu({ id, field, x, y });
   };
 
   const summary = useMemo(() => {
@@ -313,8 +369,8 @@ export default function Dashboard() {
             </div>
           </div>
         ) : (
-          <div className="card" style={{ overflow: "hidden", padding: 0 }}>
-            <div style={{ overflowX: "auto" }}>
+          <div className="card" style={{ overflow: "hidden", padding: 0, position: "relative" }}>
+            <div ref={tableScrollRef} className="agent-table-scroll">
               <table className="agent-table">
                 <thead>
                   <tr>
@@ -347,11 +403,11 @@ export default function Dashboard() {
                         <td><EditChip onClick={e => openMenu(e, s.id, "language")} active={menu?.id === s.id && menu?.field === "language"}>{s.personality.language}</EditChip></td>
                         <td>
                           <EditChip accent onClick={e => openMenu(e, s.id, "cadence")} active={menu?.id === s.id && menu?.field === "cadence"}>{s.schedule.frequency}</EditChip>
-                          <div style={{ fontSize: "0.7rem", color: "var(--ink-4)", marginTop: 4 }}>next {formatNext(s.schedule.nextRunAt)}</div>
                         </td>
                         <td>
                           <button onClick={e => openMenu(e, s.id, "channels")} className="editchip">
                             <span className="row" style={{ gap: 6 }}>
+                              <span style={{ display: "inline-flex" }} title="Leora — in-app & push, always on"><Logo size={14} /></span>
                               <span style={{ opacity: tg?.connected ? 1 : 0.28, color: "var(--info)", display: "inline-flex" }}>{I.tg()}</span>
                               <span style={{ opacity: wa?.connected ? 1 : 0.28, color: "var(--accent)", display: "inline-flex" }}>{I.wa()}</span>
                             </span>
@@ -362,29 +418,13 @@ export default function Dashboard() {
                           <div style={{ fontSize: "0.82rem", fontWeight: 550 }}>{s.stats.briefingsSent} briefs</div>
                           <div style={{ fontSize: "0.7rem", color: "var(--ink-4)" }}>{s.stats.sourcesTracked} sources · {formatElapsed(s.stats.lastBriefing)}</div>
                         </td>
-                        <td>
-                          <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
-                            <button
-                              className="icon-btn"
-                              title="Briefing history"
-                              aria-expanded={expandedId === s.id}
-                              onClick={() => setExpandedId(expandedId === s.id ? null : s.id)}
-                            >{I.clock()}</button>
-                            <button className="icon-btn" title={on ? "Pause" : "Resume"} onClick={() => patchAgent(s.id, { status: s.status === "active" ? "paused" : "active" })}>{on ? I.pause() : I.play()}</button>
-                            <button
-                              className="icon-btn"
-                              title="Configure"
-                              onClick={() => {
-                                setEditing(s);
-                                setEditForm({ name: s.name, niche: s.niche, corePrompt: s.corePrompt ?? "" });
-                                setTopicPickerOpen(false);
-                                if (savedTopics === null) {
-                                  fetch("/api/saved-topics").then(r => r.json()).then(d => { if (d.success) setSavedTopics(d.topics); }).catch(() => {});
-                                }
-                              }}
-                            >{I.gear()}</button>
-                            <button className="icon-btn danger" title="Remove" onClick={() => removeAgent(s.id, s.name)}>{I.trash()}</button>
-                          </div>
+                        <td style={{ textAlign: "right" }}>
+                          <button
+                            className="icon-btn"
+                            title="Agent actions"
+                            aria-label="Agent actions"
+                            onClick={e => openMenu(e, s.id, "actions")}
+                          >{I.more()}</button>
                         </td>
                       </tr>
                       {expandedId === s.id && (
@@ -400,6 +440,8 @@ export default function Dashboard() {
                 </tbody>
               </table>
             </div>
+            <div className="table-fade table-fade-left" style={{ opacity: tableScroll.left ? 1 : 0 }} aria-hidden="true" />
+            <div className="table-fade table-fade-right" style={{ opacity: tableScroll.right ? 1 : 0 }} aria-hidden="true">{I.arrow()}</div>
           </div>
         )}
 
@@ -407,7 +449,16 @@ export default function Dashboard() {
 
       {/* ── Popover ── */}
       {menu && activeAgent && (
-        <div onClick={e => e.stopPropagation()} className="card popover" style={{ left: menu.x, top: menu.y, minWidth: menu.field === "channels" ? 260 : menu.field === "cadence" ? 300 : 200 }}>
+        <div
+          ref={popoverRef}
+          onClick={e => e.stopPropagation()}
+          className="card popover"
+          style={{
+            left: menu.x, top: menu.y,
+            minWidth: menu.field === "channels" ? 260 : menu.field === "cadence" ? 300 : menu.field === "actions" ? 225 : 200,
+            maxHeight: `calc(100vh - ${menu.y}px - 12px)`, overflowY: "auto",
+          }}
+        >
           {menu.field === "status" && (["active", "paused"] as const).map(v => (
             <button key={v} className="pop-item" data-on={activeAgent.status === v} onClick={() => { patchAgent(menu.id, { status: v }); setMenu(null); }}>
               <span className="dot" style={{ background: v === "active" ? "var(--accent)" : "var(--ink-4)" }} />{v === "active" ? "Active — monitoring" : "Paused — stopped"}
@@ -504,6 +555,21 @@ export default function Dashboard() {
           {menu.field === "channels" && (
             <div style={{ padding: 2 }}>
               <div className="eyebrow no-rule" style={{ padding: "6px 10px 8px" }}>Delivery channels</div>
+
+              {/* Leora (in-app + push) isn't actually a per-agent toggle on the
+                  backend — every briefing is always persisted to the dashboard
+                  and pushed regardless of which external channels are linked.
+                  No onClick: the switch always reads "on" and there's nothing
+                  to flip, but it matches the Telegram/WhatsApp row styling. */}
+              <button className="pop-item" style={{ cursor: "default" }}>
+                <Logo size={16} />
+                <span style={{ flex: 1, textAlign: "left" }}>
+                  <span style={{ display: "block", fontSize: "0.85rem", fontWeight: 550 }}>Leora</span>
+                  <span style={{ display: "block", fontSize: "0.72rem", color: "var(--ink-3)" }}>In-app &amp; push notification</span>
+                </span>
+                <span className="toggle" data-on={true} />
+              </button>
+
               {([
                 { key: "telegram" as const, name: "Telegram", icon: I.tg, color: "var(--info)" },
                 { key: "whatsapp" as const, name: "WhatsApp", icon: I.wa, color: "var(--accent)" },
@@ -522,7 +588,42 @@ export default function Dashboard() {
                   </button>
                 );
               })}
-              <Link href="/delivery" className="pop-item" style={{ color: "var(--info)", fontSize: "0.8rem", justifyContent: "center" }}>Manage in Delivery →</Link>
+            </div>
+          )}
+          {menu.field === "actions" && (
+            <div style={{ padding: 2 }}>
+              <button className="pop-item" onClick={() => { setExpandedId(expandedId === menu.id ? null : menu.id); setMenu(null); }}>
+                <span style={{ color: "var(--ink-3)", display: "inline-flex" }}>{I.clock()}</span>
+                <span style={{ flex: 1, textAlign: "left" }}>{expandedId === menu.id ? "Hide briefing history" : "Briefing history"}</span>
+              </button>
+              <button className="pop-item" onClick={() => { patchAgent(menu.id, { status: activeAgent.status === "active" ? "paused" : "active" }); setMenu(null); }}>
+                <span style={{ color: "var(--ink-3)", display: "inline-flex" }}>{activeAgent.status === "active" ? I.pause() : I.play()}</span>
+                <span style={{ flex: 1, textAlign: "left" }}>{activeAgent.status === "active" ? "Pause agent" : "Resume agent"}</span>
+              </button>
+              <button
+                className="pop-item"
+                onClick={() => {
+                  setEditing(activeAgent);
+                  setEditForm({ name: activeAgent.name, niche: activeAgent.niche, corePrompt: activeAgent.corePrompt ?? "" });
+                  setTopicPickerOpen(false);
+                  if (savedTopics === null) {
+                    fetch("/api/saved-topics").then(r => r.json()).then(d => { if (d.success) setSavedTopics(d.topics); }).catch(() => {});
+                  }
+                  setMenu(null);
+                }}
+              >
+                <span style={{ color: "var(--ink-3)", display: "inline-flex" }}>{I.gear()}</span>
+                <span style={{ flex: 1, textAlign: "left" }}>Configure</span>
+              </button>
+              <div className="hairline" style={{ margin: "4px 6px" }} />
+              <button
+                className="pop-item"
+                style={{ color: "var(--danger)" }}
+                onClick={() => { const a = activeAgent; setMenu(null); removeAgent(a.id, a.name); }}
+              >
+                <span style={{ display: "inline-flex" }}>{I.trash()}</span>
+                <span style={{ flex: 1, textAlign: "left" }}>Remove agent</span>
+              </button>
             </div>
           )}
         </div>
@@ -602,6 +703,11 @@ export default function Dashboard() {
         .brief-row:hover .brief-arrow { transform: translateX(3px); color: var(--ink-2); }
         .live-row { transition: background 0.15s var(--ease); }
         .live-row:hover { background: var(--surface-2); }
+        .agent-table-scroll { overflow-x: auto; }
+        .agent-table-scroll::-webkit-scrollbar { height: 9px; }
+        .agent-table-scroll::-webkit-scrollbar-track { background: var(--surface-2); }
+        .agent-table-scroll::-webkit-scrollbar-thumb { background: var(--line-3); border-radius: 999px; }
+        .agent-table-scroll::-webkit-scrollbar-thumb:hover { background: var(--ink-4); }
         .agent-table { width: 100%; min-width: 920px; border-collapse: collapse; }
         .agent-table th { text-align: left; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-4); padding: 13px 16px; border-bottom: 1px solid var(--line); background: var(--surface-2); white-space: nowrap; }
         .agent-table th:last-child { text-align: right; }
@@ -609,6 +715,19 @@ export default function Dashboard() {
         .agent-table tbody tr:last-child td { border-bottom: none; }
         .agent-table tbody tr { transition: background 0.14s var(--ease); }
         .agent-table tbody tr:hover { background: var(--surface-2); }
+        /* Sticky identity column — stays in view while Voice/Language/Cadence/
+           Delivery/Activity scroll underneath it. Excludes the expanded
+           briefing-history row, whose single colSpan=8 cell would otherwise
+           match :first-child too and get pinned incoherently. */
+        .agent-table th:first-child, .agent-table tbody tr:not(.briefing-history-row) td:first-child { position: sticky; left: 0; z-index: 2; }
+        .agent-table th:first-child { background: var(--surface-2); border-right: 1px solid var(--line); }
+        .agent-table tbody tr:not(.briefing-history-row) td:first-child { background: var(--surface); border-right: 1px solid var(--line); }
+        .agent-table tbody tr:not(.briefing-history-row):hover td:first-child { background: var(--surface-2); }
+        .table-fade { position: absolute; top: 0; bottom: 0; width: 44px; pointer-events: none; z-index: 3; transition: opacity 0.2s var(--ease); display: flex; align-items: center; }
+        .table-fade-left { left: 0; background: linear-gradient(to right, var(--surface), transparent); }
+        .table-fade-right { right: 0; justify-content: flex-end; background: linear-gradient(to left, var(--surface), transparent); color: var(--ink-4); }
+        .table-fade-right svg { margin-right: 8px; animation: hint-nudge 1.6s var(--ease) infinite; }
+        @keyframes hint-nudge { 0%, 100% { transform: translateX(0); opacity: 0.55; } 50% { transform: translateX(4px); opacity: 1; } }
         .briefing-history-row td { white-space: normal; }
         .briefing-history-row:hover { background: transparent !important; }
         .briefing-history { background: var(--surface-2); padding: 16px 20px; border-top: 1px dashed var(--line); }
