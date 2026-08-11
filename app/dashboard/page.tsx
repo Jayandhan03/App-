@@ -9,6 +9,7 @@ import AppNav from "@/components/AppNav";
 import SavedTopicPicker, { SavedTopicShape } from "@/components/SavedTopicPicker";
 import TimePicker from "@/components/TimePicker";
 import BriefingHistoryPanel from "@/components/BriefingHistoryPanel";
+import MorningBriefRow, { RecentBriefing } from "@/components/MorningBriefRow";
 import Logo from "@/components/Logo";
 import { I } from "@/components/icons";
 import { formatElapsed } from "@/lib/format";
@@ -56,6 +57,8 @@ export default function Dashboard() {
   const router = useRouter();
   const [agents, setAgents] = useState<Agent[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [recentBriefings, setRecentBriefings] = useState<Omit<RecentBriefing, "niche" | "accent">[] | null>(null);
+  const [playingBriefId, setPlayingBriefId] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuState>(null);
   const [workIdx, setWorkIdx] = useState(0);
   const [editing, setEditing] = useState<Agent | null>(null);
@@ -81,6 +84,13 @@ export default function Dashboard() {
         const data = await res.json();
         if (data.success) setAgents(data.agents); else setErr(data.error ?? "Could not load agents.");
       } catch { setErr("Network error."); }
+    })();
+    (async () => {
+      try {
+        const res = await fetch("/api/briefings/recent?limit=3");
+        const data = await res.json();
+        if (data.success) setRecentBriefings(data.briefings);
+      } catch { /* Morning brief card just falls back to its empty state */ }
     })();
   }, [status]);
 
@@ -245,12 +255,11 @@ export default function Dashboard() {
     return <div className="row center" style={{ minHeight: "100vh" }}><span className="spinner" /></div>;
   }
 
-  /* Real recent deliveries — agents that have actually sent at least one brief. */
-  const recentBriefs = (agents ?? [])
-    .filter(s => !!s.stats.lastBriefing)
-    .sort((a, b) => new Date(b.stats.lastBriefing!).getTime() - new Date(a.stats.lastBriefing!).getTime())
-    .slice(0, 3)
-    .map(s => ({ t: `${s.name} sent a new briefing`, s: s.niche, meta: formatElapsed(s.stats.lastBriefing), c: s.accent }));
+  /* Real recent deliveries, joined with each agent's accent color/topic for display. */
+  const recentBriefs: RecentBriefing[] | null = recentBriefings === null ? null : recentBriefings.map(b => {
+    const a = agents?.find(x => x.id === b.agentId);
+    return { ...b, accent: a?.accent ?? "#4d7fff", niche: a?.niche ?? "" };
+  });
 
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
@@ -292,18 +301,19 @@ export default function Dashboard() {
               </div>
               <span className="badge badge-accent"><span className="dot" /> Fresh</span>
             </div>
-            {recentBriefs.length > 0 ? recentBriefs.map((b, k) => (
-              <div key={k} className="brief-row row" style={{ gap: 14, padding: "16px 22px", borderTop: k ? "1px solid var(--line)" : "none", cursor: "pointer" }}>
-                <span style={{ width: 3, height: 40, borderRadius: 3, background: b.c, flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: "0.95rem", fontWeight: 550, letterSpacing: "-0.01em", lineHeight: 1.4 }}>{b.t}</div>
-                  <div className="row wrap" style={{ gap: 8, marginTop: 5 }}>
-                    <span className="chip" style={{ padding: "2px 9px", fontSize: "0.72rem" }}>{b.s}</span>
-                    <span style={{ fontSize: "0.75rem", color: "var(--ink-3)" }}>{b.meta}</span>
-                  </div>
-                </div>
-                <span className="brief-arrow" style={{ color: "var(--ink-4)" }}>{I.arrow()}</span>
+            {recentBriefs === null ? (
+              <div style={{ padding: "14px 22px", display: "flex", flexDirection: "column", gap: 10 }}>
+                <div className="skeleton" style={{ height: 52, borderRadius: "var(--r-sm)" }} />
+                <div className="skeleton" style={{ height: 52, borderRadius: "var(--r-sm)" }} />
               </div>
+            ) : recentBriefs.length > 0 ? recentBriefs.map((b, k) => (
+              <MorningBriefRow
+                key={b.id}
+                briefing={b}
+                divider={k > 0}
+                isPlaying={playingBriefId === b.id}
+                onToggle={() => setPlayingBriefId(playingBriefId === b.id ? null : b.id)}
+              />
             )) : (
               <div style={{ padding: "48px 22px", textAlign: "center" }}>
                 <div className="row center" style={{ width: 44, height: 44, borderRadius: "var(--r-md)", background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--ink-3)", margin: "0 auto 14px" }}>{I.mic()}</div>
@@ -699,8 +709,6 @@ export default function Dashboard() {
         .stat-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
         .brief-row { transition: background 0.15s var(--ease); }
         .brief-row:hover { background: var(--surface-2); }
-        .brief-arrow { transition: transform 0.2s var(--ease), color 0.2s var(--ease); }
-        .brief-row:hover .brief-arrow { transform: translateX(3px); color: var(--ink-2); }
         .live-row { transition: background 0.15s var(--ease); }
         .live-row:hover { background: var(--surface-2); }
         .agent-table-scroll { overflow-x: auto; }
