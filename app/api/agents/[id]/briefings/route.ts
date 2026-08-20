@@ -7,8 +7,12 @@ import Briefing from "@/models/Briefing";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-// GET — recent briefing history for one agent, newest first. Ownership-checked
-// by email (same convention as app/api/agents/[id]/route.ts).
+const MAX_LIMIT = 50;
+
+// GET — briefing history for one agent, newest first. Ownership-checked by
+// email (same convention as app/api/agents/[id]/route.ts). Paginated via
+// skip/limit with a `total` so the expanded table row can page through the
+// agent's whole history instead of stopping at a fixed cap.
 export async function GET(req: Request, { params }: Ctx) {
   try {
     const session = await getServerSession(authOptions);
@@ -21,15 +25,21 @@ export async function GET(req: Request, { params }: Ctx) {
       return NextResponse.json({ success: false, error: "Invalid agent id" }, { status: 400 });
     }
 
+    const { searchParams } = new URL(req.url);
+    const limit = Math.min(MAX_LIMIT, Math.max(1, Number(searchParams.get("limit")) || 20));
+    const skip = Math.max(0, Number(searchParams.get("skip")) || 0);
+
     await connectToDatabase();
-    const briefings = await Briefing.find({ agentId: id, email: session.user.email })
-      .sort({ createdAt: -1 })
-      .limit(20)
-      .select("-script")
-      .lean();
+    const filter = { agentId: id, email: session.user.email };
+    const [briefings, total] = await Promise.all([
+      Briefing.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).select("-script").lean(),
+      Briefing.countDocuments(filter),
+    ]);
 
     return NextResponse.json({
       success: true,
+      total,
+      hasMore: skip + briefings.length < total,
       briefings: briefings.map((b) => ({
         id: String(b._id),
         createdAt: b.createdAt,

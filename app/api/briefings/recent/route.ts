@@ -1,12 +1,20 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import mongoose from "mongoose";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { connectToDatabase } from "@/lib/mongodb";
 import Briefing from "@/models/Briefing";
 
-// GET — most recent briefings across all of the user's agents, newest first.
-// Powers the dashboard's "Morning brief" card audio player (distinct from
-// app/api/agents/[id]/briefings, which is scoped to a single agent).
+const MAX_LIMIT = 50;
+
+// GET — the user's briefing library across every agent, newest first.
+// Powers the dashboard's "Briefing library" card: paginated via skip/limit so
+// the whole history is reachable by scrolling, and optionally narrowed to one
+// agent via ?agentId. (app/api/agents/[id]/briefings serves the per-agent
+// history embedded in the agents table.)
+//
+// Returns `total` for the *current* query so the UI can show a real count on
+// every filter chip and know when to stop asking for more pages.
 export async function GET(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -15,17 +23,28 @@ export async function GET(req: Request) {
     }
 
     const { searchParams } = new URL(req.url);
-    const limit = Math.min(10, Math.max(1, Number(searchParams.get("limit")) || 3));
+    const limit = Math.min(MAX_LIMIT, Math.max(1, Number(searchParams.get("limit")) || 3));
+    const skip = Math.max(0, Number(searchParams.get("skip")) || 0);
+    const agentId = searchParams.get("agentId");
+
+    const query: Record<string, unknown> = { email: session.user.email };
+    if (agentId) {
+      if (!mongoose.isValidObjectId(agentId)) {
+        return NextResponse.json({ success: false, error: "Invalid agent id" }, { status: 400 });
+      }
+      query.agentId = new mongoose.Types.ObjectId(agentId);
+    }
 
     await connectToDatabase();
-    const briefings = await Briefing.find({ email: session.user.email })
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .select("-script")
-      .lean();
+    const [briefings, total] = await Promise.all([
+      Briefing.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).select("-script").lean(),
+      Briefing.countDocuments(query),
+    ]);
 
     return NextResponse.json({
       success: true,
+      total,
+      hasMore: skip + briefings.length < total,
       briefings: briefings.map((b) => ({
         id: String(b._id),
         agentId: String(b.agentId),
@@ -34,6 +53,7 @@ export async function GET(req: Request) {
         createdAt: b.createdAt,
         label: b.label,
         articleCount: b.articleCount,
+        channels: b.channels ?? {},
       })),
     });
   } catch (err: unknown) {

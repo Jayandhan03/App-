@@ -502,6 +502,98 @@ svg { max-width: none; }
   transform: translateX(-100%); animation: shimmer 1.6s infinite;
 }
 
+/* ── Audio player (components/AudioPlayer.tsx) ──
+   Shared by the dashboard briefing library and the notification inbox, so it
+   lives here rather than in either page's local style block. */
+.ap {
+  --ap-accent: var(--accent);
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+}
+.ap[data-variant="mini"] { gap: 7px; }
+
+.ap-play {
+  flex-shrink: 0; display: grid; place-items: center; cursor: pointer;
+  width: 32px; height: 32px; border-radius: 50%; border: none;
+  background: var(--ap-accent); color: #fff;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--ap-accent) 35%, transparent);
+  transition: transform 0.14s var(--ease), box-shadow 0.14s var(--ease);
+}
+.ap[data-variant="mini"] .ap-play { width: 27px; height: 27px; }
+.ap-play:hover { transform: scale(1.07); box-shadow: 0 4px 14px color-mix(in srgb, var(--ap-accent) 45%, transparent); }
+.ap-play:active { transform: scale(0.97); }
+.ap-play:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+.ap-play svg { width: 12px; height: 12px; }
+/* Nudges the play triangle onto its optical centre; the pause bars are
+   already symmetric and must not be shifted. */
+.ap:not([data-playing]) .ap-play svg { margin-left: 1.5px; }
+.ap-spin {
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff;
+  animation: spin 0.7s linear infinite;
+}
+
+.ap-skip {
+  flex-shrink: 0; display: grid; place-items: center; cursor: pointer;
+  width: 26px; height: 26px; border-radius: 50%; border: none;
+  background: none; color: var(--ink-4);
+  transition: color 0.14s var(--ease), background 0.14s var(--ease);
+}
+.ap-skip:hover { color: var(--ink); background: var(--surface-2); }
+.ap-skip:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ring); }
+
+/* Three stacked bands make up the track: a full-width base rail, the buffered
+   range on top of it, and the range input itself painting the played portion.
+   The .ap prefix on the input rules is load-bearing — .scrubber is defined
+   further down this file and would otherwise win on source order and repaint
+   the bar in currentColor instead of the row's accent. */
+.ap-track { position: relative; flex: 1; min-width: 40px; display: flex; align-items: center; }
+.ap-track::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%);
+  height: 4px; border-radius: 2px; background: var(--line-2); pointer-events: none;
+}
+.ap-buffered {
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  height: 4px; border-radius: 2px; background: var(--line-3);
+  pointer-events: none; transition: width 0.3s linear;
+}
+.ap .ap-range {
+  position: relative; z-index: 1;
+  background: linear-gradient(to right, var(--ap-accent) var(--pct, 0%), transparent var(--pct, 0%));
+}
+.ap .ap-range:disabled { cursor: progress; opacity: 0.6; }
+.ap .ap-range::-webkit-slider-thumb { background: var(--ap-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ap-accent) 22%, transparent); }
+.ap .ap-range::-moz-range-thumb { background: var(--ap-accent); }
+.ap .ap-range::-moz-range-track { background: transparent; }
+.ap .ap-range:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); border-radius: 2px; }
+
+.ap-time {
+  flex-shrink: 0; font-size: 0.68rem; color: var(--ink-4); white-space: nowrap;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+}
+.ap-time[data-ready] { color: var(--ink-3); }
+.ap-time-sep { opacity: 0.5; margin: 0 3px; }
+
+.ap-speed {
+  flex-shrink: 0; cursor: pointer; height: 22px; min-width: 32px; padding: 0 6px;
+  border-radius: var(--r-full); border: 1px solid var(--line-2); background: var(--surface);
+  font-family: inherit; font-size: 0.68rem; font-weight: 700; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  transition: color 0.14s var(--ease), border-color 0.14s var(--ease);
+}
+.ap-speed:hover { color: var(--ink); border-color: var(--line-3); }
+.ap-speed:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
+
+@media (max-width: 520px) {
+  .ap-skip, .ap-speed { display: none; }
+}
+
+/* Audio scrubber — shared by the dashboard briefing players and the
+   notification panel, which renders on every signed-in page. */
+.scrubber { -webkit-appearance: none; appearance: none; flex: 1; height: 4px; border-radius: 2px; cursor: pointer; background: linear-gradient(to right, currentColor var(--pct, 0%), var(--line-2) var(--pct, 0%)); color: inherit; }
+.scrubber::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 11px; height: 11px; border-radius: 50%; background: currentColor; cursor: pointer; }
+.scrubber::-moz-range-thumb { width: 11px; height: 11px; border-radius: 50%; background: currentColor; border: none; cursor: pointer; }
+.scrubber::-moz-range-track { height: 4px; border-radius: 2px; background: var(--line-2); }
+
 .spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--accent); animation: spin 0.7s linear infinite; }
 
 .thinking {

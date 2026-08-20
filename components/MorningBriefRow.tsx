@@ -1,102 +1,101 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import AudioPlayer from "@/components/AudioPlayer";
 import { I } from "@/components/icons";
-import { formatElapsed, formatDuration } from "@/lib/format";
+import { formatElapsed } from "@/lib/format";
 
 export type RecentBriefing = {
   id: string;
   agentId: string;
   agentName: string;
+  agentIcon: string;
   createdAt: string;
+  label: string;
   articleCount: number;
+  channels: { app?: boolean; telegram?: boolean; whatsapp?: boolean };
   niche: string;
   accent: string;
 };
 
-/* A full play/pause + scrubber player for the dashboard's "Morning brief"
-   card — controls stay visible at all times (same always-on convention as
-   BriefingRow's player further down the page), rather than appearing only
-   once playback starts. */
+/* An agent's name, its topic and its briefing labels are very often the same
+   string — an agent called "Agentic AI Trends for Developers" covering that
+   niche labels every briefing with it too. Printed verbatim that produced a
+   row saying the same phrase three times (heading, agent chip, topic chip).
+   So the title claims the phrase first and the chips below only render what
+   it hasn't already said. */
+function chipsFor(b: RecentBriefing, title: string): { icon?: string; text: string }[] {
+  const seen = new Set([title.toLowerCase()]);
+  const out: { icon?: string; text: string }[] = [];
+  const add = (text: string, icon?: string) => {
+    const key = text.trim().toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    out.push({ text, icon });
+  };
+  add(b.agentName, b.agentIcon);
+  add(b.niche);
+  return out;
+}
+
+/* One briefing in the dashboard library. Times are shown as a clock reading
+   as well as an age: the list is grouped by day and a single agent's rows are
+   otherwise near-identical, so "7:32 AM" is what actually distinguishes two
+   entries from the same morning. */
 export default function MorningBriefRow({
   briefing,
   isPlaying,
   onToggle,
   divider,
+  showAgent = true,
 }: {
   briefing: RecentBriefing;
   isPlaying: boolean;
   onToggle: () => void;
   divider: boolean;
+  showAgent?: boolean;
 }) {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (isPlaying) {
-      audio.play().catch(() => {}); // autoplay can reject if the user hasn't interacted yet — ignore, the click that got us here counts
-    } else {
-      audio.pause();
-    }
-  }, [isPlaying]);
-
-  const pct = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const title = briefing.label?.trim() || briefing.agentName;
+  const chips = showAgent ? chipsFor(briefing, title) : chipsFor({ ...briefing, agentName: "" }, title);
+  const clock = new Date(briefing.createdAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
   return (
-    <div className="brief-row row" style={{ gap: 14, padding: "16px 22px", borderTop: divider ? "1px solid var(--line)" : "none" }}>
-      <audio
-        ref={audioRef}
-        preload="metadata"
+    <div
+      className="brief-row"
+      data-playing={isPlaying || undefined}
+      style={{ padding: "14px 22px", borderTop: divider ? "1px solid var(--line)" : "none" }}
+    >
+      <div className="row between" style={{ gap: 10, marginBottom: 9 }}>
+        <div style={{ fontSize: "0.92rem", fontWeight: 600, letterSpacing: "-0.01em", lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {title}
+        </div>
+        <span style={{ fontSize: "0.72rem", color: "var(--ink-3)", flexShrink: 0, whiteSpace: "nowrap" }}>
+          {clock} <span style={{ color: "var(--ink-4)" }}>· {formatElapsed(briefing.createdAt)}</span>
+        </span>
+      </div>
+
+      <AudioPlayer
         src={`/api/briefings/${briefing.id}/audio`}
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+        accent={briefing.accent}
+        playing={isPlaying}
+        onToggle={onToggle}
         onEnded={onToggle}
+        label={title}
       />
 
-      <button
-        className="briefing-play"
-        style={{ background: briefing.accent, color: "#fff", flexShrink: 0 }}
-        onClick={onToggle}
-        aria-label={isPlaying ? "Pause" : "Play"}
-      >
-        {isPlaying ? I.pause() : I.play()}
-      </button>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div className="row between" style={{ gap: 8 }}>
-          <div style={{ fontSize: "0.95rem", fontWeight: 550, letterSpacing: "-0.01em", lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {briefing.agentName} sent a new briefing
-          </div>
-          <span style={{ fontSize: "0.75rem", color: "var(--ink-3)", flexShrink: 0 }}>{formatElapsed(briefing.createdAt)}</span>
-        </div>
-
-        <div className="row" style={{ gap: 8, marginTop: 7 }}>
-          <input
-            type="range"
-            className="scrubber"
-            min={0}
-            max={duration || 0}
-            value={Math.min(currentTime, duration || 0)}
-            step={0.1}
-            style={{ "--pct": `${pct}%`, color: briefing.accent } as React.CSSProperties}
-            onChange={(e) => {
-              const t = Number(e.target.value);
-              if (audioRef.current) audioRef.current.currentTime = t;
-              setCurrentTime(t);
-            }}
-          />
-          <span className="mono" style={{ fontSize: "0.68rem", color: "var(--ink-4)", flexShrink: 0, minWidth: 72, textAlign: "right" }}>
-            {formatDuration(currentTime)} / {formatDuration(duration)}
+      <div className="row wrap" style={{ gap: 8, marginTop: 9 }}>
+        {chips.map((c) => (
+          <span key={c.text} className="chip" style={{ padding: "2px 9px", fontSize: "0.72rem", gap: 5 }}>
+            {c.icon && <span aria-hidden="true">{c.icon}</span>}
+            <span style={{ maxWidth: 170, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.text}</span>
           </span>
-        </div>
-
-        <div className="row wrap" style={{ gap: 8, marginTop: 8 }}>
-          {briefing.niche && <span className="chip" style={{ padding: "2px 9px", fontSize: "0.72rem" }}>{briefing.niche}</span>}
+        ))}
+        {/* Older briefings predate source tracking and report 0 — saying
+            "0 sources" reads as a failure, so the count is simply omitted. */}
+        {briefing.articleCount > 0 && (
           <span style={{ fontSize: "0.75rem", color: "var(--ink-3)" }}>{briefing.articleCount} sources</span>
-        </div>
+        )}
+        {briefing.channels?.telegram && <span style={{ color: "var(--info)", display: "inline-flex" }} title="Delivered to Telegram">{I.tg()}</span>}
+        {briefing.channels?.whatsapp && <span style={{ color: "var(--accent)", display: "inline-flex" }} title="Delivered to WhatsApp">{I.wa()}</span>}
       </div>
     </div>
   );

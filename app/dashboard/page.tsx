@@ -9,7 +9,7 @@ import AppNav from "@/components/AppNav";
 import SavedTopicPicker, { SavedTopicShape } from "@/components/SavedTopicPicker";
 import TimePicker from "@/components/TimePicker";
 import BriefingHistoryPanel from "@/components/BriefingHistoryPanel";
-import MorningBriefRow, { RecentBriefing } from "@/components/MorningBriefRow";
+import BriefingLibrary from "@/components/BriefingLibrary";
 import Logo from "@/components/Logo";
 import { I } from "@/components/icons";
 import { formatElapsed } from "@/lib/format";
@@ -57,8 +57,6 @@ export default function Dashboard() {
   const router = useRouter();
   const [agents, setAgents] = useState<Agent[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [recentBriefings, setRecentBriefings] = useState<Omit<RecentBriefing, "niche" | "accent">[] | null>(null);
-  const [playingBriefId, setPlayingBriefId] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuState>(null);
   const [workIdx, setWorkIdx] = useState(0);
   const [editing, setEditing] = useState<Agent | null>(null);
@@ -84,13 +82,6 @@ export default function Dashboard() {
         const data = await res.json();
         if (data.success) setAgents(data.agents); else setErr(data.error ?? "Could not load agents.");
       } catch { setErr("Network error."); }
-    })();
-    (async () => {
-      try {
-        const res = await fetch("/api/briefings/recent?limit=3");
-        const data = await res.json();
-        if (data.success) setRecentBriefings(data.briefings);
-      } catch { /* Morning brief card just falls back to its empty state */ }
     })();
   }, [status]);
 
@@ -255,12 +246,6 @@ export default function Dashboard() {
     return <div className="row center" style={{ minHeight: "100vh" }}><span className="spinner" /></div>;
   }
 
-  /* Real recent deliveries, joined with each agent's accent color/topic for display. */
-  const recentBriefs: RecentBriefing[] | null = recentBriefings === null ? null : recentBriefings.map(b => {
-    const a = agents?.find(x => x.id === b.agentId);
-    return { ...b, accent: a?.accent ?? "#4d7fff", niche: a?.niche ?? "" };
-  });
-
   const today = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   return (
@@ -292,34 +277,10 @@ export default function Dashboard() {
 
         {/* ── Brief + Live panel ── */}
         <div className="dash-split rise-2" style={{ marginBottom: 44 }}>
-          {/* Morning brief */}
-          <div className="card" style={{ overflow: "hidden" }}>
-            <div className="row between" style={{ padding: "18px 22px", borderBottom: "1px solid var(--line)" }}>
-              <div>
-                <div className="eyebrow no-rule" style={{ marginBottom: 4 }}>Morning brief</div>
-                <div style={{ fontSize: "1.05rem", fontWeight: 600, letterSpacing: "-0.02em" }}>Worth your attention today</div>
-              </div>
-              <span className="badge badge-accent"><span className="dot" /> Fresh</span>
-            </div>
-            {recentBriefs === null ? (
-              <div style={{ padding: "14px 22px", display: "flex", flexDirection: "column", gap: 10 }}>
-                <div className="skeleton" style={{ height: 52, borderRadius: "var(--r-sm)" }} />
-                <div className="skeleton" style={{ height: 52, borderRadius: "var(--r-sm)" }} />
-              </div>
-            ) : recentBriefs.length > 0 ? recentBriefs.map((b, k) => (
-              <MorningBriefRow
-                key={b.id}
-                briefing={b}
-                divider={k > 0}
-                isPlaying={playingBriefId === b.id}
-                onToggle={() => setPlayingBriefId(playingBriefId === b.id ? null : b.id)}
-              />
-            )) : (
-              <div style={{ padding: "48px 22px", textAlign: "center" }}>
-                <div className="row center" style={{ width: 44, height: 44, borderRadius: "var(--r-md)", background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--ink-3)", margin: "0 auto 14px" }}>{I.mic()}</div>
-                <p className="t-2" style={{ fontSize: "0.9rem" }}>Your morning brief will appear here once an agent is running.</p>
-              </div>
-            )}
+          {/* Briefing library — the full history across every agent, filterable
+              and scrollable, rather than a fixed peek at the latest few. */}
+          <div className="card" style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            <BriefingLibrary agents={agents} />
           </div>
 
           {/* Live agents */}
@@ -743,10 +704,6 @@ export default function Dashboard() {
         .briefing-row { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px 14px; }
         .briefing-play { flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; border: none; display: grid; place-items: center; cursor: pointer; transition: transform 0.14s var(--ease); }
         .briefing-play:hover { transform: scale(1.06); }
-        .scrubber { -webkit-appearance: none; appearance: none; flex: 1; height: 4px; border-radius: 2px; cursor: pointer; background: linear-gradient(to right, currentColor var(--pct, 0%), var(--line-2) var(--pct, 0%)); color: inherit; }
-        .scrubber::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 11px; height: 11px; border-radius: 50%; background: currentColor; cursor: pointer; }
-        .scrubber::-moz-range-thumb { width: 11px; height: 11px; border-radius: 50%; background: currentColor; border: none; cursor: pointer; }
-        .scrubber::-moz-range-track { height: 4px; border-radius: 2px; background: var(--line-2); }
       `}</style>
     </div>
   );
