@@ -38,7 +38,7 @@ export default function Dropdown<T extends string>({
   }, [open]);
 
   return (
-    <div ref={wrapRef} style={{ position: "relative", flexShrink: 0 }}>
+    <div ref={wrapRef} style={{ position: "relative", minWidth: 0, maxWidth: "100%" }}>
       <button
         type="button"
         disabled={disabled}
@@ -49,7 +49,7 @@ export default function Dropdown<T extends string>({
         aria-expanded={open}
       >
         {cur?.icon && <span aria-hidden>{cur.icon}</span>}
-        <span>{cur?.label}</span>
+        <span className="dd-trigger-label">{cur?.label}</span>
         <svg width="11" height="11" viewBox="0 0 20 20" fill="none" className="dd-chevron" data-open={open}>
           <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>

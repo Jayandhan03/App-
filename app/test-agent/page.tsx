@@ -23,13 +23,36 @@ function WaIcon({ size = 16, color = "currentColor" }: { size?: number; color?: 
   return <svg width={size} height={size} viewBox="0 0 24 24" fill={color}><path d="M12.05 0C5.5 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.88 11.88 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.82 11.82 0 00-3.48-8.413A11.815 11.815 0 0012.05 0zm6.98 16.813c-.297.833-1.72 1.593-2.363 1.69-.604.09-1.368.128-2.208-.14-.51-.161-1.163-.377-2-.738-3.52-1.52-5.82-5.062-5.996-5.296-.173-.235-1.43-1.9-1.43-3.625s.905-2.573 1.226-2.925c.32-.352.7-.44.934-.44.234 0 .467.002.672.012.215.01.504-.082.788.602.297.703 1.008 2.428 1.096 2.604.09.176.148.383.03.618-.117.235-.176.383-.352.588-.176.204-.37.457-.53.614-.176.176-.36.367-.155.72.205.351.912 1.503 1.958 2.436 1.345 1.2 2.48 1.57 2.832 1.746.352.176.557.147.762-.088.205-.235.878-1.026 1.113-1.378.234-.352.469-.293.792-.176.323.117 2.048.966 2.4 1.142.352.176.586.264.674.41.088.147.088.851-.209 1.684z" /></svg>;
 }
 
-/** One compact line of the control panel: icon + label on the left, a cycle-toggle / control on the right. */
+/**
+ * One line of the control panel: an icon badge, a fixed-width label column,
+ * then the control — every Row shares the same icon/label column widths
+ * (set in CSS) so controls line up in a true grid whether a row stands
+ * alone or shares a line with another Row inside a RowPair.
+ */
 function Row({ icon, label, children, detail }: { icon: string; label: string; children: React.ReactNode; detail?: React.ReactNode }) {
   return (
     <div className="setting-row">
-      <span className="setting-row-label"><span className="setting-row-icon" aria-hidden>{icon}</span>{label}</span>
-      {children}
+      <span className="setting-row-head">
+        <span className="setting-row-icon" aria-hidden>{icon}</span>
+        <span className="setting-row-label-text">{label}</span>
+      </span>
+      <span className="setting-row-control">{children}</span>
       {detail && <div className="setting-row-detail">{detail}</div>}
+    </div>
+  );
+}
+
+/** Two Rows sharing one visual line — the pairing that lets the wider panel cut its own height. */
+function RowPair({ children }: { children: React.ReactNode }) {
+  return <div className="row-pair">{children}</div>;
+}
+
+/** A labeled group of Rows — sections replace individual row borders with clear, named chunks. */
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="panel-section">
+      <div className="panel-section-title">{title}</div>
+      {children}
     </div>
   );
 }
@@ -376,20 +399,22 @@ export default function CreateAgent() {
       <AppNav />
       <div style={{ position: "relative", overflow: "hidden" }}>
         <div className="aurora" aria-hidden="true" />
-        <main className="container" style={{ maxWidth: 660, padding: "28px 24px 60px", position: "relative" }}>
-          <div className="row between" style={{ marginBottom: 16 }}>
-            <div>
-              <div className="row" style={{ gap: 8, marginBottom: 4 }}>
-                <span className="badge badge-accent" style={{ height: 22, fontSize: "0.66rem" }}><span className="dot dot-live" /> Live web</span>
-              </div>
-              <h1 style={{ fontSize: "1.5rem", fontWeight: 650, letterSpacing: "-0.02em" }}>Create an agent</h1>
-            </div>
-            <p className="t-muted" style={{ fontSize: "0.8rem", textAlign: "right", maxWidth: 220 }}>Name a topic, tune the dial, deploy.</p>
-          </div>
-
+        <main className="container agent-console-main" style={{ maxWidth: 900, padding: "40px 24px 60px", position: "relative" }}>
           {/* ── The control panel — one card, no page scroll to configure ── */}
-          <div className="card" style={{ padding: "22px 24px", borderRadius: "var(--r-xl)" }}>
+          <div className="card card-featured agent-console-card" style={{ padding: "26px 28px", borderRadius: "var(--r-xl)" }}>
+            <div className="row between wrap" style={{ marginBottom: 20, gap: 10 }}>
+              <span className="row" style={{ gap: 10 }}>
+                <span className="row center" style={{ width: 36, height: 36, borderRadius: "var(--r-md)", background: "var(--accent)", color: "#fff", fontSize: "1rem", flexShrink: 0, boxShadow: "0 0 0 5px var(--accent-soft)" }} aria-hidden>🎙️</span>
+                <span>
+                  <div style={{ fontSize: "1.05rem", fontWeight: 650, letterSpacing: "-0.015em" }}>Create an agent</div>
+                  <div className="t-muted" style={{ fontSize: "0.76rem" }}>Name a topic, tune the dial, deploy.</div>
+                </span>
+              </span>
+              <span className="badge badge-accent" style={{ height: 24, fontSize: "0.68rem", flexShrink: 0 }}><span className="dot dot-live" /> Live web</span>
+            </div>
+
             {/* ── Topic — chat view before lock, one collapsed line after ── */}
+            <Section title="Topic">
             {!locked ? (
               <>
                 <div className="row between" style={{ gap: 10, marginBottom: 14 }}>
@@ -451,48 +476,20 @@ export default function CreateAgent() {
                 </div>
               </>
             )}
+            </Section>
 
-            {/* ── Dial rows — always visible, regardless of topic lock status ── */}
-            <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--line)" }}>
-              <Row icon="🕰️" label="Look back">
-                <Dropdown options={windowOptions} value={dataWindow} onChange={setDataWindow} disabled={isLoading} />
-              </Row>
+            {/* ── Schedule — when it looks, how often, what timezone ── */}
+            <Section title="Schedule">
+              <RowPair>
+                <Row icon="🕰️" label="Look back">
+                  <Dropdown options={windowOptions} value={dataWindow} onChange={setDataWindow} disabled={isLoading} />
+                </Row>
+                <Row icon="🌍" label="Timezone">
+                  <Dropdown options={tzOptions} value={timezone} onChange={setTimezone} disabled={isLoading} />
+                </Row>
+              </RowPair>
 
-              <Row
-                icon="🗓️"
-                label="Cadence"
-                detail={
-                  <div className="expand" data-open={scheduleNeedsDetail}>
-                    <div>
-                      <div className="row wrap" style={{ gap: 18, alignItems: "center", paddingTop: 2 }}>
-                        {cadence.timeSlots > 0 && Array.from({ length: cadence.timeSlots }).map((_, i) => (
-                          <TimePicker
-                            key={i}
-                            value={times[i] ?? "09:00"}
-                            disabled={isLoading}
-                            onChange={v => setTimes(prev => { const next = [...prev]; next[i] = v; return next; })}
-                          />
-                        ))}
-                        {cadence.needsWeekday && (
-                          <div className="row wrap" style={{ gap: 4 }}>
-                            {WEEKDAYS.map((d, i) => (
-                              <button key={d} type="button" onClick={() => setWeekday(i)} style={{
-                                width: 30, height: 30, borderRadius: "50%", fontSize: "0.72rem", fontWeight: 700, cursor: "pointer",
-                                background: weekday === i ? "var(--accent-soft)" : "var(--surface-2)",
-                                border: `1px solid ${weekday === i ? "var(--accent-line)" : "var(--line-2)"}`,
-                                color: weekday === i ? "var(--accent-ink)" : "var(--ink-2)",
-                              }}>{d[0]}</button>
-                            ))}
-                          </div>
-                        )}
-                        {!cadence.needsWeekday && cadence.timeSlots > 0 && (
-                          <DatePicker value={startDate} min={todayStr} onChange={v => { setStartDateTouched(true); setStartDate(v); }} />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                }
-              >
+              <Row icon="🗓️" label="Cadence">
                 <Dropdown
                   options={cadenceOptions}
                   value={cadence.label}
@@ -506,22 +503,58 @@ export default function CreateAgent() {
                 />
               </Row>
 
-              <Row icon="🌍" label="Timezone">
-                <Dropdown options={tzOptions} value={timezone} onChange={setTimezone} disabled={isLoading} />
-              </Row>
+              <div className="expand" data-open={scheduleNeedsDetail}>
+                <div>
+                  <div className="cadence-detail-panel row wrap" style={{ gap: 18, marginTop: 6 }}>
+                    {cadence.timeSlots > 0 && Array.from({ length: cadence.timeSlots }).map((_, i) => (
+                      <TimePicker
+                        key={i}
+                        value={times[i] ?? "09:00"}
+                        disabled={isLoading}
+                        onChange={v => setTimes(prev => { const next = [...prev]; next[i] = v; return next; })}
+                      />
+                    ))}
+                    {cadence.needsWeekday && (
+                      <div className="row wrap" style={{ gap: 4 }}>
+                        {WEEKDAYS.map((d, i) => (
+                          <button key={d} type="button" onClick={() => setWeekday(i)} style={{
+                            width: 30, height: 30, borderRadius: "50%", fontSize: "0.72rem", fontWeight: 700, cursor: "pointer",
+                            background: weekday === i ? "var(--accent-soft)" : "var(--surface-2)",
+                            border: `1px solid ${weekday === i ? "var(--accent-line)" : "var(--line-2)"}`,
+                            color: weekday === i ? "var(--accent-ink)" : "var(--ink-2)",
+                          }}>{d[0]}</button>
+                        ))}
+                      </div>
+                    )}
+                    {!cadence.needsWeekday && cadence.timeSlots > 0 && (
+                      <DatePicker value={startDate} min={todayStr} onChange={v => { setStartDateTouched(true); setStartDate(v); }} />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Section>
 
-              <Row icon="🎙️" label="Voice">
-                <span className="row wrap" style={{ gap: 8, justifyContent: "flex-end" }}>
+            {/* ── Voice — how it sounds ── */}
+            <Section title="Voice">
+              <RowPair>
+                <Row icon="🎙️" label="Language">
                   <Dropdown options={langOptions} value={lang} onChange={setLang} disabled={isLoading} />
-                  <Dropdown options={toneOptions} value={tone} onChange={setTone} disabled={isLoading} />
-                  <button type="button" onClick={testVoice} className="icon-btn" style={{ borderRadius: "50%" }} title="Preview voice" aria-label="Preview voice">
-                    {voiceLoading ? <span className="spinner" style={{ width: 12, height: 12 }} /> : voiceTesting ? "◼" : "▶"}
-                  </button>
-                </span>
-              </Row>
+                </Row>
+                <Row icon="🎭" label="Tone">
+                  <span className="row" style={{ gap: 8 }}>
+                    <Dropdown options={toneOptions} value={tone} onChange={setTone} disabled={isLoading} />
+                    <button type="button" onClick={testVoice} className="icon-btn" style={{ borderRadius: "50%" }} title="Preview voice" aria-label="Preview voice">
+                      {voiceLoading ? <span className="spinner" style={{ width: 12, height: 12 }} /> : voiceTesting ? "◼" : "▶"}
+                    </button>
+                  </span>
+                </Row>
+              </RowPair>
+            </Section>
 
+            {/* ── Delivery — where it goes ── */}
+            <Section title="Delivery">
               <Row icon="📡" label="Send to">
-                <span className="row wrap" style={{ gap: 7, justifyContent: "flex-end" }}>
+                <span className="row wrap" style={{ gap: 7 }}>
                   {channelChip(tgConnected, telegramEnabled, () => setTelegramEnabled(v => !v), <TgIcon size={13} color="#229ED9" />, "Telegram")}
                   {channelChip(waConnected, whatsappEnabled, () => setWhatsappEnabled(v => !v), <WaIcon size={13} color="#25D366" />, "WhatsApp")}
                   {notifSupported && notifPermission !== "denied" && !notifLoading && (
@@ -531,10 +564,10 @@ export default function CreateAgent() {
                   )}
                 </span>
               </Row>
-            </div>
+            </Section>
 
             {/* Next run — the concrete payoff, always visible */}
-            <div className="row between" style={{ gap: 10, marginTop: 16, padding: "11px 15px", borderRadius: "var(--r-md)", background: "var(--accent-soft)", border: "1px solid var(--accent-line)" }}>
+            <div className="row between" style={{ gap: 10, marginTop: 24, padding: "11px 15px", borderRadius: "var(--r-md)", background: "var(--accent-soft)", border: "1px solid var(--accent-line)" }}>
               <span className="row" style={{ gap: 8, fontSize: "0.82rem", color: "var(--accent-ink)", minWidth: 0 }}>
                 <span aria-hidden>🔔</span>
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><b>{nextRunText}</b></span>

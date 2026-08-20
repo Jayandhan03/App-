@@ -389,11 +389,12 @@ svg { max-width: none; }
    DROPDOWN — premium custom select (create-agent control panel)
    ========================================================================== */
 .dd-trigger {
-  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px;
+  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; max-width: 100%;
   border-radius: var(--r-full); border: 1px solid var(--line-2); background: var(--surface);
-  color: var(--ink); font-size: 0.82rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+  color: var(--ink); font-size: 0.82rem; font-weight: 600; cursor: pointer;
   box-shadow: var(--shadow-xs); transition: all 0.16s var(--ease);
 }
+.dd-trigger-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .dd-trigger:hover:not(:disabled) { border-color: var(--line-3); background: var(--surface-2); }
 .dd-trigger[data-open="true"] { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-ink); box-shadow: 0 0 0 3px var(--ring); }
 .dd-trigger:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -428,13 +429,45 @@ svg { max-width: none; }
 .mini-toggle[data-on="true"] .dot { background: var(--accent); }
 
 /* ============================================================================
-   SETTINGS ROW — one compact line of the control-panel card
+   CONTROL PANEL — sectioned settings grid (create-agent console)
+   Every row shares one fixed alignment grid (icon-badge | label | control)
+   so values line up in a true column regardless of which row or which half
+   of a paired row they're in. Rows are grouped into labeled sections instead
+   of one flat list, and dividers live between sections, not between rows.
    ========================================================================== */
-.setting-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 0; flex-wrap: wrap; }
-.setting-row + .setting-row { border-top: 1px solid var(--line); }
-.setting-row-label { display: inline-flex; align-items: center; gap: 9px; font-size: 0.84rem; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
-.setting-row-icon { font-size: 0.95rem; flex-shrink: 0; width: 20px; text-align: center; }
-.setting-row-detail { flex-basis: 100%; padding-top: 10px; }
+.panel-section + .panel-section { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--line); }
+.panel-section-title {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--ink-3); margin-bottom: 10px;
+}
+
+.setting-row { display: flex; align-items: center; gap: 14px; padding: 8px 0; flex-wrap: wrap; flex: 0 1 auto; }
+.setting-row-head { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+.setting-row-icon {
+  width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.94rem; background: var(--surface-2); border: 1px solid var(--line);
+}
+.setting-row-label-text { font-size: 0.83rem; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; width: 84px; flex-shrink: 0; }
+.setting-row-control { display: flex; align-items: center; min-width: 0; }
+
+.row-pair { display: flex; flex-wrap: wrap; gap: 10px 40px; }
+.setting-row-detail { flex-basis: 100%; margin-top: 4px; }
+/* inline-flex so the shaded panel hugs its own content instead of stretching
+   to the row's full width and leaving a slab of empty background on the right */
+.cadence-detail-panel { display: inline-flex; background: var(--surface-2); border-radius: var(--r-md); padding: 14px 16px; margin-left: 46px; max-width: 100%; }
+
+/* ── Small screens: icon+label stay together, control drops to its own
+   full-width line below instead of cramming everything onto one row ── */
+@media (max-width: 640px) {
+  .setting-row { gap: 6px; }
+  .setting-row-label-text { width: auto; }
+  .setting-row-control { width: 100%; }
+  .row-pair { flex-direction: column; gap: 18px; }
+  .cadence-detail-panel { margin-left: 0; width: 100%; }
+  .agent-console-main { padding: 20px 14px 40px !important; }
+  .agent-console-card { padding: 20px 16px !important; }
+}
 
 .expand { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.3s var(--ease); }
 .expand[data-open="true"] { grid-template-rows: 1fr; }
