@@ -16,6 +16,7 @@ export default function Dropdown<T extends string>({
   onChange,
   disabled,
   align = "right",
+  triggerClassName = "",
 }: {
   options: DropdownOption<T>[];
   value: T;
@@ -23,6 +24,8 @@ export default function Dropdown<T extends string>({
   disabled?: boolean;
   /** Which edge the menu hangs from — keeps it on-screen for controls near the card's right edge. */
   align?: "left" | "right";
+  /** Extra class appended to the trigger button — lets callers render the same dropdown as a bare, borderless value line (e.g. inside a tile) instead of the default pill. */
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -43,7 +46,7 @@ export default function Dropdown<T extends string>({
         type="button"
         disabled={disabled}
         onClick={() => setOpen(o => !o)}
-        className="dd-trigger"
+        className={`dd-trigger ${triggerClassName}`}
         data-open={open}
         aria-haspopup="listbox"
         aria-expanded={open}

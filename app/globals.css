@@ -416,55 +416,77 @@ svg { max-width: none; }
 .dd-item[data-on="true"] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 650; }
 .dd-check { color: var(--accent-ink); font-size: 0.78rem; flex-shrink: 0; }
 
-/* Small inline toggle-chip — for a row of 2-3 binary options on one line
-   (e.g. delivery channels) where a full-width toggle-row would cost a line each. */
-.mini-toggle {
-  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px 0 10px;
-  border-radius: var(--r-full); border: 1px solid var(--line-2); background: var(--surface);
-  font-size: 0.78rem; font-weight: 600; color: var(--ink-3); cursor: pointer; transition: all 0.16s var(--ease);
-}
-.mini-toggle[data-on="true"] { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent-ink); }
-.mini-toggle:hover:not([data-on="true"]) { border-color: var(--line-3); color: var(--ink-2); }
-.mini-toggle .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--line-3); flex-shrink: 0; }
-.mini-toggle[data-on="true"] .dot { background: var(--accent); }
-
 /* ============================================================================
-   CONTROL PANEL — sectioned settings grid (create-agent console)
-   Every row shares one fixed alignment grid (icon-badge | label | control)
-   so values line up in a true column regardless of which row or which half
-   of a paired row they're in. Rows are grouped into labeled sections instead
-   of one flat list, and dividers live between sections, not between rows.
+   STEP — numbered section header ("1  What should your agent watch?")
+   Each step in the create-agent wizard gets a badge + title + one-line
+   description, with an optional trailing action (e.g. "Saved topics").
    ========================================================================== */
-.panel-section + .panel-section { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--line); }
-.panel-section-title {
-  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
-  color: var(--ink-3); margin-bottom: 10px;
+.step-block + .step-block { margin-top: 30px; padding-top: 26px; border-top: 1px solid var(--line); }
+.step-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+.step-head-main { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.step-num {
+  width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0; margin-top: 1px;
+  display: grid; place-items: center; font-size: 0.78rem; font-weight: 700;
+  background: var(--accent-soft); color: var(--accent-ink); border: 1px solid var(--accent-line);
 }
+.step-title { font-size: 0.95rem; font-weight: 650; letter-spacing: -0.01em; }
+.step-desc { font-size: 0.78rem; color: var(--ink-3); margin-top: 3px; }
+.step-action { flex-shrink: 0; }
 
-.setting-row { display: flex; align-items: center; gap: 14px; padding: 8px 0; flex-wrap: wrap; flex: 0 1 auto; }
-.setting-row-head { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
-.setting-row-icon {
-  width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 0.94rem; background: var(--surface-2); border: 1px solid var(--line);
+/* Tile — a bordered box for one field: icon badge, bold label, muted value
+   line below (which may itself be a Dropdown rendered borderless). */
+.tile-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.tile {
+  display: flex; align-items: center; gap: 10px; flex: 1 1 150px; min-width: 150px;
+  padding: 12px 14px; border-radius: var(--r-md); border: 1px solid var(--line-2); background: var(--surface-2);
 }
-.setting-row-label-text { font-size: 0.83rem; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; width: 84px; flex-shrink: 0; }
-.setting-row-control { display: flex; align-items: center; min-width: 0; }
+.tile-icon {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; font-size: 0.92rem;
+  display: grid; place-items: center; background: var(--surface); border: 1px solid var(--line);
+}
+.tile-body { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tile-label { font-size: 0.8rem; font-weight: 650; color: var(--ink); white-space: nowrap; }
+.tile-value { font-size: 0.72rem; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.row-pair { display: flex; flex-wrap: wrap; gap: 10px 40px; }
-.setting-row-detail { flex-basis: 100%; margin-top: 4px; }
-/* inline-flex so the shaded panel hugs its own content instead of stretching
-   to the row's full width and leaving a slab of empty background on the right */
-.cadence-detail-panel { display: inline-flex; background: var(--surface-2); border-radius: var(--r-md); padding: 14px 16px; margin-left: 46px; max-width: 100%; }
+/* Dropdown rendered inside a tile — bare value line instead of the default pill. */
+.dd-trigger-tile { height: auto; padding: 0; border: none; background: transparent; box-shadow: none; font-size: 0.72rem; font-weight: 600; color: var(--ink-3); }
+.dd-trigger-tile:hover:not(:disabled) { background: transparent; border-color: transparent; color: var(--ink-2); }
+.dd-trigger-tile[data-open="true"] { background: transparent; box-shadow: none; color: var(--accent-ink); }
 
-/* ── Small screens: icon+label stay together, control drops to its own
-   full-width line below instead of cramming everything onto one row ── */
+/* Time row — one bordered box holding the time picker + AM/PM + start date,
+   matching the tile visual language but spanning the full row. */
+.time-row-box { display: flex; align-items: center; flex-wrap: wrap; gap: 20px; padding: 14px 16px; margin-top: 10px; border-radius: var(--r-md); border: 1px solid var(--line-2); background: var(--surface-2); width: 100%; }
+.time-row-field { display: flex; align-items: center; gap: 10px; }
+.time-row-field-label { font-size: 0.78rem; font-weight: 600; color: var(--ink-3); flex-shrink: 0; }
+
+/* Delivery — larger selectable cards (icon, label, trailing check/arrow)
+   replacing the compact mini-toggle pills for the "where to deliver" step. */
+.delivery-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.delivery-card {
+  display: flex; align-items: center; gap: 10px; flex: 1 1 150px; min-width: 150px;
+  padding: 13px 15px; border-radius: var(--r-md); border: 1px solid var(--line-2); background: var(--surface-2);
+  font-size: 0.85rem; font-weight: 600; color: var(--ink-2); cursor: pointer; transition: all 0.16s var(--ease);
+}
+.delivery-card:hover { border-color: var(--line-3); }
+.delivery-card[data-on="true"] { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-ink); }
+.delivery-check {
+  margin-left: auto; width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+  display: grid; place-items: center; font-size: 0.66rem; color: transparent; background: var(--line-2);
+  transition: all 0.16s var(--ease);
+}
+.delivery-card[data-on="true"] .delivery-check { background: var(--accent); color: #fff; }
+.delivery-arrow { margin-left: auto; opacity: 0.6; flex-shrink: 0; }
+
+/* Summary bar — the concrete next-run payoff, with an inline Edit action. */
+.summary-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 24px; padding: 12px 16px; border-radius: var(--r-md); background: var(--accent-soft); border: 1px solid var(--accent-line); }
+.summary-bar-main { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
+
+/* ── Small screens: tiles and delivery cards stack to one per line ── */
 @media (max-width: 640px) {
-  .setting-row { gap: 6px; }
-  .setting-row-label-text { width: auto; }
-  .setting-row-control { width: 100%; }
-  .row-pair { flex-direction: column; gap: 18px; }
-  .cadence-detail-panel { margin-left: 0; width: 100%; }
+  .tile, .delivery-card { flex-basis: 100%; }
+}
+
+@media (max-width: 640px) {
   .agent-console-main { padding: 20px 14px 40px !important; }
   .agent-console-card { padding: 20px 16px !important; }
 }

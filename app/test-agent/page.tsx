@@ -23,36 +23,34 @@ function WaIcon({ size = 16, color = "currentColor" }: { size?: number; color?: 
   return <svg width={size} height={size} viewBox="0 0 24 24" fill={color}><path d="M12.05 0C5.5 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.88 11.88 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.82 11.82 0 00-3.48-8.413A11.815 11.815 0 0012.05 0zm6.98 16.813c-.297.833-1.72 1.593-2.363 1.69-.604.09-1.368.128-2.208-.14-.51-.161-1.163-.377-2-.738-3.52-1.52-5.82-5.062-5.996-5.296-.173-.235-1.43-1.9-1.43-3.625s.905-2.573 1.226-2.925c.32-.352.7-.44.934-.44.234 0 .467.002.672.012.215.01.504-.082.788.602.297.703 1.008 2.428 1.096 2.604.09.176.148.383.03.618-.117.235-.176.383-.352.588-.176.204-.37.457-.53.614-.176.176-.36.367-.155.72.205.351.912 1.503 1.958 2.436 1.345 1.2 2.48 1.57 2.832 1.746.352.176.557.147.762-.088.205-.235.878-1.026 1.113-1.378.234-.352.469-.293.792-.176.323.117 2.048.966 2.4 1.142.352.176.586.264.674.41.088.147.088.851-.209 1.684z" /></svg>;
 }
 
-/**
- * One line of the control panel: an icon badge, a fixed-width label column,
- * then the control — every Row shares the same icon/label column widths
- * (set in CSS) so controls line up in a true grid whether a row stands
- * alone or shares a line with another Row inside a RowPair.
- */
-function Row({ icon, label, children, detail }: { icon: string; label: string; children: React.ReactNode; detail?: React.ReactNode }) {
+/** One numbered step of the create-agent wizard: badge, title, one-line description, optional trailing action. */
+function Step({ id, n, title, desc, action, children }: { id?: string; n: number; title: string; desc: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="setting-row">
-      <span className="setting-row-head">
-        <span className="setting-row-icon" aria-hidden>{icon}</span>
-        <span className="setting-row-label-text">{label}</span>
-      </span>
-      <span className="setting-row-control">{children}</span>
-      {detail && <div className="setting-row-detail">{detail}</div>}
+    <div id={id} className="step-block">
+      <div className="step-head">
+        <div className="step-head-main">
+          <span className="step-num" aria-hidden>{n}</span>
+          <span>
+            <div className="step-title">{title}</div>
+            <div className="step-desc">{desc}</div>
+          </span>
+        </div>
+        {action && <div className="step-action">{action}</div>}
+      </div>
+      {children}
     </div>
   );
 }
 
-/** Two Rows sharing one visual line — the pairing that lets the wider panel cut its own height. */
-function RowPair({ children }: { children: React.ReactNode }) {
-  return <div className="row-pair">{children}</div>;
-}
-
-/** A labeled group of Rows — sections replace individual row borders with clear, named chunks. */
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+/** A bordered field box: icon badge, bold label, muted value line (often a bare Dropdown) below it. */
+function Tile({ icon, label, children }: { icon: string; label: string; children: React.ReactNode }) {
   return (
-    <div className="panel-section">
-      <div className="panel-section-title">{title}</div>
-      {children}
+    <div className="tile">
+      <span className="tile-icon" aria-hidden>{icon}</span>
+      <span className="tile-body">
+        <span className="tile-label">{label}</span>
+        <span className="tile-value">{children}</span>
+      </span>
     </div>
   );
 }
@@ -384,15 +382,25 @@ export default function CreateAgent() {
   const selectedWindow = DATA_WINDOWS.find(w => w.value === dataWindow);
   const scheduleNeedsDetail = cadence.timeSlots > 0 || cadence.needsWeekday;
 
-  const channelChip = (
+  const savedTopicsBtn = savedTopics && savedTopics.length > 0 && (
+    <button type="button" onClick={() => setPickerOpen(o => !o)} className="btn btn-secondary btn-sm" style={{ fontSize: "0.76rem" }}>⭐ Saved topics</button>
+  );
+
+  const deliveryCard = (
     connected: boolean, on: boolean, toggle: () => void, icon: React.ReactNode, label: string,
   ) => connected ? (
-    <button type="button" onClick={toggle} className="mini-toggle" data-on={on}>
-      <span className="dot" />{icon}{label}
+    <button type="button" onClick={toggle} className="delivery-card" data-on={on}>
+      {icon}<span>{label}</span>
+      <span className="delivery-check" aria-hidden>✓</span>
     </button>
   ) : (
-    <Link href="/delivery" className="mini-toggle">{icon}{label}<span style={{ opacity: 0.6 }}>→</span></Link>
+    <Link href="/delivery" className="delivery-card">
+      {icon}<span>{label}</span>
+      <span className="delivery-arrow" aria-hidden>→</span>
+    </Link>
   );
+
+  const scrollToSchedule = () => document.getElementById("step-schedule")?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
@@ -400,29 +408,37 @@ export default function CreateAgent() {
       <div style={{ position: "relative", overflow: "hidden" }}>
         <div className="aurora" aria-hidden="true" />
         <main className="container agent-console-main" style={{ maxWidth: 900, padding: "40px 24px 60px", position: "relative" }}>
+
+          {/* ── Hero — title, subtitle, a small floating orb for warmth ── */}
+          <div className="row between wrap" style={{ gap: 24, marginBottom: 28 }}>
+            <div style={{ maxWidth: 520 }}>
+              <h1 style={{ fontSize: "clamp(1.7rem, 3.4vw, 2.3rem)", fontWeight: 650, letterSpacing: "-0.02em", lineHeight: 1.12 }}>
+                Create your <span style={{ color: "var(--accent-ink)" }}>intelligence agent</span>
+              </h1>
+              <p className="t-muted" style={{ fontSize: "0.92rem", marginTop: 10 }}>
+                Tell Leora what to watch, how to deliver, and when. Your agent. Your rules.
+              </p>
+            </div>
+            <div style={{ position: "relative", width: 84, height: 84, flexShrink: 0 }} aria-hidden>
+              <span style={{
+                position: "absolute", inset: 0, borderRadius: "50%",
+                background: "radial-gradient(circle at 35% 30%, var(--accent-soft), var(--surface-2))",
+                border: "1px solid var(--accent-line)", boxShadow: "var(--shadow-glow)",
+                display: "grid", placeItems: "center", fontSize: "1.9rem",
+                animation: "floaty 5s var(--ease-io) infinite",
+              }}>🤖</span>
+              <span style={{ position: "absolute", top: -6, left: -10, width: 26, height: 26, borderRadius: "var(--r-sm)", background: "var(--surface)", border: "1px solid var(--line-2)", display: "grid", placeItems: "center", fontSize: "0.8rem", boxShadow: "var(--shadow-xs)" }}>📄</span>
+              <span style={{ position: "absolute", bottom: -4, right: -12, width: 26, height: 26, borderRadius: "var(--r-sm)", background: "var(--surface)", border: "1px solid var(--line-2)", display: "grid", placeItems: "center", fontSize: "0.8rem", boxShadow: "var(--shadow-xs)" }}>✈️</span>
+            </div>
+          </div>
+
           {/* ── The control panel — one card, no page scroll to configure ── */}
           <div className="card card-featured agent-console-card" style={{ padding: "26px 28px", borderRadius: "var(--r-xl)" }}>
-            <div className="row between wrap" style={{ marginBottom: 20, gap: 10 }}>
-              <span className="row" style={{ gap: 10 }}>
-                <span className="row center" style={{ width: 36, height: 36, borderRadius: "var(--r-md)", background: "var(--accent)", color: "#fff", fontSize: "1rem", flexShrink: 0, boxShadow: "0 0 0 5px var(--accent-soft)" }} aria-hidden>🎙️</span>
-                <span>
-                  <div style={{ fontSize: "1.05rem", fontWeight: 650, letterSpacing: "-0.015em" }}>Create an agent</div>
-                  <div className="t-muted" style={{ fontSize: "0.76rem" }}>Name a topic, tune the dial, deploy.</div>
-                </span>
-              </span>
-              <span className="badge badge-accent" style={{ height: 24, fontSize: "0.68rem", flexShrink: 0 }}><span className="dot dot-live" /> Live web</span>
-            </div>
 
-            {/* ── Topic — chat view before lock, one collapsed line after ── */}
-            <Section title="Topic">
+            {/* ── Step 1 — Topic ── */}
+            <Step n={1} title="What should your agent watch?" desc="Define the topic, keywords or areas you want updates on." action={!pickerOpen ? savedTopicsBtn : undefined}>
             {!locked ? (
               <>
-                <div className="row between" style={{ gap: 10, marginBottom: 14 }}>
-                  <span className="row" style={{ gap: 9, fontSize: "0.95rem", fontWeight: 650 }}><span aria-hidden>💬</span>What should it watch?</span>
-                  {!pickerOpen && savedTopics && savedTopics.length > 0 && (
-                    <button type="button" onClick={() => setPickerOpen(true)} className="btn btn-ghost btn-sm" style={{ fontSize: "0.72rem" }}>📌 Saved topics</button>
-                  )}
-                </div>
                 {pickerOpen ? (
                   <SavedTopicPicker
                     topics={savedTopics ?? []}
@@ -443,12 +459,7 @@ export default function CreateAgent() {
                     <span style={{ color: "var(--accent-ink)", flexShrink: 0 }}>🔒</span>
                     <span style={{ fontSize: "0.88rem", fontWeight: 650, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{locked.topic}</span>
                   </span>
-                  <span className="row" style={{ gap: 6, flexShrink: 0 }}>
-                    {savedTopics && savedTopics.length > 0 && (
-                      <button type="button" onClick={() => setPickerOpen(true)} className="btn btn-ghost btn-sm" style={{ fontSize: "0.72rem" }}>📌</button>
-                    )}
-                    <button type="button" onClick={restartChat} disabled={isLoading} className="btn btn-ghost btn-sm" style={{ fontSize: "0.72rem" }}>Change</button>
-                  </span>
+                  <button type="button" onClick={restartChat} disabled={isLoading} className="btn btn-ghost btn-sm" style={{ fontSize: "0.72rem", flexShrink: 0 }}>Change</button>
                 </div>
 
                 {pickerOpen && (
@@ -476,110 +487,126 @@ export default function CreateAgent() {
                 </div>
               </>
             )}
-            </Section>
+            </Step>
 
-            {/* ── Schedule — when it looks, how often, what timezone ── */}
-            <Section title="Schedule">
-              <RowPair>
-                <Row icon="🕰️" label="Look back">
-                  <Dropdown options={windowOptions} value={dataWindow} onChange={setDataWindow} disabled={isLoading} />
-                </Row>
-                <Row icon="🌍" label="Timezone">
-                  <Dropdown options={tzOptions} value={timezone} onChange={setTimezone} disabled={isLoading} />
-                </Row>
-              </RowPair>
-
-              <Row icon="🗓️" label="Cadence">
-                <Dropdown
-                  options={cadenceOptions}
-                  value={cadence.label}
-                  disabled={isLoading}
-                  onChange={label => {
-                    const c = CADENCES.find(x => x.label === label);
-                    if (!c) return;
-                    setCadence(c); setTimes(c.defaultTimes);
-                    if (c.needsWeekday && weekday == null) setWeekday(1);
-                  }}
-                />
-              </Row>
+            {/* ── Step 2 — Schedule ── */}
+            <Step id="step-schedule" n={2} title="When should it run?" desc="Set how often and at what time your agent should collect and deliver.">
+              <div className="tile-row">
+                <Tile icon="🕰️" label="Look back">
+                  <Dropdown options={windowOptions} value={dataWindow} onChange={setDataWindow} disabled={isLoading} triggerClassName="dd-trigger-tile" />
+                </Tile>
+                <Tile icon="🌍" label="Timezone">
+                  <Dropdown options={tzOptions} value={timezone} onChange={setTimezone} disabled={isLoading} triggerClassName="dd-trigger-tile" />
+                </Tile>
+                <Tile icon="🗓️" label="Cadence">
+                  <Dropdown
+                    options={cadenceOptions}
+                    value={cadence.label}
+                    disabled={isLoading}
+                    triggerClassName="dd-trigger-tile"
+                    onChange={label => {
+                      const c = CADENCES.find(x => x.label === label);
+                      if (!c) return;
+                      setCadence(c); setTimes(c.defaultTimes);
+                      if (c.needsWeekday && weekday == null) setWeekday(1);
+                    }}
+                  />
+                </Tile>
+              </div>
 
               <div className="expand" data-open={scheduleNeedsDetail}>
                 <div>
-                  <div className="cadence-detail-panel row wrap" style={{ gap: 18, marginTop: 6 }}>
+                  <div className="time-row-box">
                     {cadence.timeSlots > 0 && Array.from({ length: cadence.timeSlots }).map((_, i) => (
-                      <TimePicker
-                        key={i}
-                        value={times[i] ?? "09:00"}
-                        disabled={isLoading}
-                        onChange={v => setTimes(prev => { const next = [...prev]; next[i] = v; return next; })}
-                      />
+                      <div className="time-row-field" key={i}>
+                        {cadence.timeSlots > 1 && <span className="time-row-field-label">Time</span>}
+                        <TimePicker
+                          value={times[i] ?? "09:00"}
+                          disabled={isLoading}
+                          onChange={v => setTimes(prev => { const next = [...prev]; next[i] = v; return next; })}
+                        />
+                      </div>
                     ))}
                     {cadence.needsWeekday && (
-                      <div className="row wrap" style={{ gap: 4 }}>
-                        {WEEKDAYS.map((d, i) => (
-                          <button key={d} type="button" onClick={() => setWeekday(i)} style={{
-                            width: 30, height: 30, borderRadius: "50%", fontSize: "0.72rem", fontWeight: 700, cursor: "pointer",
-                            background: weekday === i ? "var(--accent-soft)" : "var(--surface-2)",
-                            border: `1px solid ${weekday === i ? "var(--accent-line)" : "var(--line-2)"}`,
-                            color: weekday === i ? "var(--accent-ink)" : "var(--ink-2)",
-                          }}>{d[0]}</button>
-                        ))}
+                      <div className="time-row-field">
+                        <div className="row wrap" style={{ gap: 4 }}>
+                          {WEEKDAYS.map((d, i) => (
+                            <button key={d} type="button" onClick={() => setWeekday(i)} style={{
+                              width: 30, height: 30, borderRadius: "50%", fontSize: "0.72rem", fontWeight: 700, cursor: "pointer",
+                              background: weekday === i ? "var(--accent-soft)" : "var(--surface)",
+                              border: `1px solid ${weekday === i ? "var(--accent-line)" : "var(--line-2)"}`,
+                              color: weekday === i ? "var(--accent-ink)" : "var(--ink-2)",
+                            }}>{d[0]}</button>
+                          ))}
+                        </div>
                       </div>
                     )}
                     {!cadence.needsWeekday && cadence.timeSlots > 0 && (
-                      <DatePicker value={startDate} min={todayStr} onChange={v => { setStartDateTouched(true); setStartDate(v); }} />
+                      <div className="time-row-field">
+                        <span className="time-row-field-label">Start date</span>
+                        <DatePicker value={startDate} min={todayStr} onChange={v => { setStartDateTouched(true); setStartDate(v); }} />
+                      </div>
                     )}
                   </div>
                 </div>
               </div>
-            </Section>
+            </Step>
 
-            {/* ── Voice — how it sounds ── */}
-            <Section title="Voice">
-              <RowPair>
-                <Row icon="🎙️" label="Language">
-                  <Dropdown options={langOptions} value={lang} onChange={setLang} disabled={isLoading} />
-                </Row>
-                <Row icon="🎭" label="Tone">
-                  <span className="row" style={{ gap: 8 }}>
-                    <Dropdown options={toneOptions} value={tone} onChange={setTone} disabled={isLoading} />
-                    <button type="button" onClick={testVoice} className="icon-btn" style={{ borderRadius: "50%" }} title="Preview voice" aria-label="Preview voice">
-                      {voiceLoading ? <span className="spinner" style={{ width: 12, height: 12 }} /> : voiceTesting ? "◼" : "▶"}
-                    </button>
+            {/* ── Step 3 — Voice ── */}
+            <Step n={3} title="How should it speak?" desc="Choose the voice and tone for your updates.">
+              <div className="tile-row">
+                <Tile icon="🎙️" label="Language">
+                  <Dropdown options={langOptions} value={lang} onChange={setLang} disabled={isLoading} triggerClassName="dd-trigger-tile" />
+                </Tile>
+                <Tile icon="🎭" label="Tone">
+                  <Dropdown options={toneOptions} value={tone} onChange={setTone} disabled={isLoading} triggerClassName="dd-trigger-tile" />
+                </Tile>
+                <button type="button" onClick={testVoice} className="tile" style={{ cursor: "pointer", textAlign: "left", border: "1px solid var(--line-2)" }}>
+                  <span className="tile-icon" aria-hidden>{voiceLoading ? <span className="spinner" style={{ width: 13, height: 13 }} /> : voiceTesting ? "◼" : "▶"}</span>
+                  <span className="tile-body">
+                    <span className="tile-label">Preview voice</span>
+                    <span className={`tile-value eq ${voiceTesting ? "" : "eq-muted"}`} style={{ height: 10, marginTop: 2 }}>
+                      {Array.from({ length: 5 }).map((_, i) => <span key={i} />)}
+                    </span>
                   </span>
-                </Row>
-              </RowPair>
-            </Section>
+                </button>
+              </div>
+            </Step>
 
-            {/* ── Delivery — where it goes ── */}
-            <Section title="Delivery">
-              <Row icon="📡" label="Send to">
-                <span className="row wrap" style={{ gap: 7 }}>
-                  {channelChip(tgConnected, telegramEnabled, () => setTelegramEnabled(v => !v), <TgIcon size={13} color="#229ED9" />, "Telegram")}
-                  {channelChip(waConnected, whatsappEnabled, () => setWhatsappEnabled(v => !v), <WaIcon size={13} color="#25D366" />, "WhatsApp")}
-                  {notifSupported && notifPermission !== "denied" && !notifLoading && (
-                    <button type="button" onClick={handleToggleNotifications} disabled={notifWorking} className="mini-toggle" data-on={notifEnabled}>
-                      <span className="dot" /><Logo size={12} />In-app
-                    </button>
-                  )}
-                </span>
-              </Row>
-            </Section>
+            {/* ── Step 4 — Delivery ── */}
+            <Step n={4} title="Where should we deliver?" desc="Choose your preferred platform to receive updates.">
+              <div className="delivery-grid">
+                {deliveryCard(tgConnected, telegramEnabled, () => setTelegramEnabled(v => !v), <TgIcon size={16} color="#229ED9" />, "Telegram")}
+                {deliveryCard(waConnected, whatsappEnabled, () => setWhatsappEnabled(v => !v), <WaIcon size={16} color="#25D366" />, "WhatsApp")}
+                {notifSupported && notifPermission !== "denied" && !notifLoading ? (
+                  <button type="button" onClick={handleToggleNotifications} disabled={notifWorking} className="delivery-card" data-on={notifEnabled}>
+                    <Logo size={16} /><span>In-app</span>
+                    <span className="delivery-check" aria-hidden>✓</span>
+                  </button>
+                ) : (
+                  <div className="delivery-card" data-on="true" style={{ cursor: "default" }}>
+                    <Logo size={16} /><span>In-app</span>
+                    <span className="delivery-check" aria-hidden>✓</span>
+                  </div>
+                )}
+              </div>
+            </Step>
 
             {/* Next run — the concrete payoff, always visible */}
-            <div className="row between" style={{ gap: 10, marginTop: 24, padding: "11px 15px", borderRadius: "var(--r-md)", background: "var(--accent-soft)", border: "1px solid var(--accent-line)" }}>
-              <span className="row" style={{ gap: 8, fontSize: "0.82rem", color: "var(--accent-ink)", minWidth: 0 }}>
+            <div className="summary-bar">
+              <span className="summary-bar-main">
                 <span aria-hidden>🔔</span>
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><b>{nextRunText}</b></span>
+                <span style={{ fontSize: "0.85rem", color: "var(--accent-ink)" }}><b>{nextRunText}</b></span>
+                <span className="t-muted" style={{ fontSize: "0.78rem" }}>via {["In-app", ...externalChannels].join(" • ")}</span>
               </span>
-              <span className="t-muted" style={{ fontSize: "0.74rem", flexShrink: 0 }}>{["In-app", ...externalChannels].join(" + ")}</span>
+              <button type="button" onClick={scrollToSchedule} className="btn btn-secondary btn-sm" style={{ fontSize: "0.76rem", flexShrink: 0 }}>Edit</button>
             </div>
 
             {/* Actions — always visible; Deploy just stays disabled until topic + name exist */}
             <div className="row" style={{ gap: 10, marginTop: 16 }}>
-              <button type="button" onClick={() => setPreviewOpen(true)} className="btn btn-secondary" style={{ flexShrink: 0 }}>🎧 Preview</button>
+              <button type="button" onClick={() => setPreviewOpen(true)} className="btn btn-secondary" style={{ flexShrink: 0 }}>👁 Preview agent</button>
               <button onClick={handleDeploy} disabled={deploying || !topic.trim() || !agentName.trim() || !hasDeliveryChannel} className="btn btn-primary btn-lg" style={{ flex: 1 }}>
-                {deploying ? <><span className="spinner" style={{ width: 15, height: 15, borderTopColor: "var(--solid-ink)" }} /> Deploying…</> : "🚀 Deploy agent"}
+                {deploying ? <><span className="spinner" style={{ width: 15, height: 15, borderTopColor: "var(--solid-ink)" }} /> Deploying…</> : "🚀 Create & deploy agent"}
               </button>
             </div>
             {deployError && <div style={{ marginTop: 10, fontSize: "0.8rem", color: "var(--danger)", textAlign: "center" }}>{deployError}</div>}
@@ -587,7 +614,9 @@ export default function CreateAgent() {
               <p className="t-muted" style={{ fontSize: "0.74rem", textAlign: "center", marginTop: 8 }}>Lock in a topic above to deploy.</p>
             ) : !agentName.trim() ? (
               <p className="t-muted" style={{ fontSize: "0.74rem", textAlign: "center", marginTop: 8 }}>Name your agent above to deploy.</p>
-            ) : null}
+            ) : (
+              <p className="t-muted" style={{ fontSize: "0.74rem", textAlign: "center", marginTop: 8 }}>🔒 You can always edit these settings later.</p>
+            )}
           </div>
         </main>
       </div>
