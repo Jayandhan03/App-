@@ -4,7 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import AppNav from "@/components/AppNav";
-import { useNotificationToggle, getCurrentDeviceToken } from "@/lib/push";
+import { useNotificationToggle, getCurrentDeviceToken, waitForNotificationDisplay } from "@/lib/push";
 import { isNativeApp } from "@/lib/capacitor";
 import Logo from "@/components/Logo";
 
@@ -62,7 +62,7 @@ export default function Delivery() {
     osSettingsOpened: notifOsSettingsOpened,
     os: notifOs,
     toggle: handleToggleNotifications,
-    recheckOs: recheckNotifOs,
+    reportTestResult: reportNotifTestResult,
   } = useNotificationToggle();
 
   const [inappTesting, setInappTesting] = useState(false);
@@ -145,6 +145,10 @@ export default function Delivery() {
       // which always plays the same pre-recorded sample clip
       // (public/audio/test-briefing.mp3) — no TTS generation call needed.
       const clickUrl = "/test-briefing";
+      // Echoed back in the push's data payload so we can confirm whether
+      // THIS specific notification actually displayed, rather than asking a
+      // separate synthetic probe.
+      const probeId = crypto.randomUUID();
 
       // ── Native app: none of the web-push machinery below applies ───────────
       // No browser service worker, no web FCM token, no Notification API —
@@ -213,7 +217,7 @@ export default function Delivery() {
       const res = await fetch("/api/inapp-test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: deviceToken, clickUrl }),
+        body: JSON.stringify({ token: deviceToken, clickUrl, probeId }),
       });
 
       if (!res.ok) {
@@ -225,10 +229,12 @@ export default function Delivery() {
       setInappTestSent(true);
       setTimeout(() => setInappTestSent(false), 5000);
 
-      // Re-probe OS-level delivery a moment later — if the OS is silently
-      // swallowing notifications, surface the existing "blocked" banner
-      // (with its OS-specific fix button) instead of a false "success".
-      setTimeout(() => { recheckNotifOs(); }, 1500);
+      // Confirm against THIS notification's own display outcome — if it
+      // genuinely never rendered, surface the "blocked" banner; if it did
+      // (as just shown to the user), clear any stale warning instead of
+      // re-flagging it from an unrelated probe.
+      const displayed = await waitForNotificationDisplay(probeId);
+      reportNotifTestResult(displayed);
     } catch {
       setInappTestError("Network error — try again.");
     } finally {
@@ -351,14 +357,14 @@ export default function Delivery() {
                     <div style={{ fontSize: "0.76rem", color: "var(--ink-3)", lineHeight: 1.6, marginBottom: 10 }}>
                       {notifEnabled ? (
                         notifOs === "windows"
-                          ? <>Your browser permission is granted, but <strong>Windows</strong> is blocking Chrome from showing notifications. We'll open <strong>Windows Settings → Notifications</strong> for you — just turn on <strong>Google Chrome</strong>.</>
+                          ? <>Your browser permission is granted, but <strong>Windows</strong> may be blocking this browser from showing notifications. We'll open <strong>Windows Settings → Notifications</strong> for you — find this browser in the list and turn it on.</>
                           : notifOs === "mac"
-                          ? <>macOS is blocking Chrome. We'll open <strong>System Settings → Notifications → Google Chrome</strong> — set it to <strong>Banners</strong> or <strong>Alerts</strong>.</>
+                          ? <>macOS may be blocking this browser. We'll open its notification settings — find this browser in the list and set it to <strong>Banners</strong> or <strong>Alerts</strong>.</>
                           : notifOs === "android"
                           ? <>Android is blocking notifications for this app. We'll open <strong>App Settings</strong> — enable notifications there.</>
-                          : <>Your OS is blocking notifications. Click below to open the system notification settings.</>
+                          : <>Your OS may be blocking notifications. Click below to open the system notification settings.</>
                       ) : (
-                        <>No permission prompt appeared when you tapped the toggle — <strong>{notifOs === "android" ? "Android" : notifOs === "windows" ? "Windows" : notifOs === "mac" ? "macOS" : "your device"}</strong> is blocking this browser from asking at all. Enable notifications for your browser app in system settings, then tap the toggle again.</>
+                        <>No permission prompt appeared when you tapped the toggle — <strong>{notifOs === "android" ? "Android" : notifOs === "windows" ? "Windows" : notifOs === "mac" ? "macOS" : "your device"}</strong> is blocking this browser from asking at all. Enable notifications for this browser in system settings, then tap the toggle again.</>
                       )}
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
@@ -384,9 +390,10 @@ export default function Delivery() {
                           type="button"
                           className="btn btn-sm btn-secondary"
                           style={{ fontSize: "0.78rem" }}
-                          onClick={recheckNotifOs}
+                          onClick={handleInappTest}
+                          disabled={inappTesting}
                         >
-                          ✓ Done — verify
+                          {inappTesting ? <><span className="spinner" style={{ width: 13, height: 13 }} /> Verifying…</> : "✓ Done — verify"}
                         </button>
                       ) : (
                         <button

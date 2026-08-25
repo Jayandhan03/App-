@@ -132,14 +132,16 @@ export async function openOsNotificationSettings(): Promise<boolean> {
 }
 
 /**
- * Probes whether a notification will actually appear by having the service
- * worker send one and listening for a confirmation message back.
- * Returns true if the notification visibly fired within the timeout.
+ * Single probe attempt: ask the service worker to show a silent notification
+ * and wait for it to broadcast a confirmation back. We rely on the SW's own
+ * showNotification() call as the sole signal — never a page-context call —
+ * because real briefings are always delivered through the SW's
+ * onBackgroundMessage handler, so this is the only faithful proxy for that
+ * path. Returns true if the SW confirmed within the timeout.
  */
-async function probeNotificationDelivery(timeoutMs = 3500): Promise<boolean> {
+async function probeOnce(timeoutMs: number): Promise<boolean> {
   if (!("serviceWorker" in navigator)) return false;
   return new Promise<boolean>((resolve) => {
-    const channel = new MessageChannel();
     let settled = false;
 
     const done = (result: boolean) => {
@@ -154,20 +156,26 @@ async function probeNotificationDelivery(timeoutMs = 3500): Promise<boolean> {
     };
     navigator.serviceWorker.addEventListener("message", onMsg);
 
-    // Ask the active SW to show a silent probe notification and echo back.
     navigator.serviceWorker.ready
-      .then((sw) => {
-        sw.active?.postMessage({ type: "PROBE_NOTIFICATION" }, [channel.port2]);
-        // Show a real (but quiet) notification through the SW and watch for
-        // the ACK. If it never arrives the OS is swallowing notifications.
-        sw.showNotification("", { silent: true, tag: "__leora_probe__" })
-          .then(() => done(true))
-          .catch(() => done(false));
-      })
+      .then((sw) => sw.active?.postMessage({ type: "PROBE_NOTIFICATION" }))
       .catch(() => done(false));
 
     setTimeout(() => done(false), timeoutMs);
   });
+}
+
+/**
+ * Probes whether a notification will actually appear, retrying once before
+ * giving up. A single slow attempt isn't enough to call the OS blocked — a
+ * cold service worker can genuinely take longer than one short timeout to
+ * wake up and reply, especially with many tabs open, so one retry avoids
+ * false "blocked" reports from what was really just a slow first wake-up.
+ */
+async function probeNotificationDelivery(timeoutMs = 3500, attempts = 2): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    if (await probeOnce(timeoutMs)) return true;
+  }
+  return false;
 }
 
 // ── Web push enablement ───────────────────────────────────────────────────────
@@ -192,6 +200,53 @@ async function getWebMessaging() {
   return getMessaging(app);
 }
 
+// ── Real-notification display confirmation ────────────────────────────────
+// Lets a caller (the "send test notification" button) find out whether the
+// specific push it just sent actually got displayed, by matching on the
+// data.probeId the server echoed back — instead of relying on a separate,
+// unrelated synthetic probe that can behave differently from a real content
+// notification (e.g. an OS treating an empty/silent probe notification
+// differently from a normal one).
+type DisplayResolver = (displayed: boolean) => void;
+const _pendingDisplayConfirmations = new Map<string, DisplayResolver>();
+let _testConfirmationListenerBound = false;
+
+function confirmNotificationDisplay(probeId: string | undefined, displayed: boolean) {
+  if (!probeId) return;
+  const resolver = _pendingDisplayConfirmations.get(probeId);
+  if (resolver) resolver(displayed);
+}
+
+function ensureTestConfirmationListener() {
+  if (_testConfirmationListenerBound || typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+  _testConfirmationListenerBound = true;
+  navigator.serviceWorker.addEventListener("message", (ev) => {
+    if (ev.data?.type === "TEST_NOTIFICATION_DISPLAYED") {
+      confirmNotificationDisplay(ev.data.probeId, Boolean(ev.data.displayed));
+    }
+  });
+}
+
+/**
+ * Waits to find out whether the push tagged with `probeId` was actually
+ * displayed — resolved by the foreground handler below (tab focused) or by
+ * the service worker's background handler (tab unfocused), whichever fires.
+ * Resolves false if nothing confirms it within the timeout.
+ */
+export function waitForNotificationDisplay(probeId: string, timeoutMs = 6000): Promise<boolean> {
+  ensureTestConfirmationListener();
+  return new Promise((resolve) => {
+    const resolver: DisplayResolver = (displayed) => {
+      _pendingDisplayConfirmations.delete(probeId);
+      resolve(displayed);
+    };
+    _pendingDisplayConfirmations.set(probeId, resolver);
+    setTimeout(() => {
+      if (_pendingDisplayConfirmations.has(probeId)) resolver(false);
+    }, timeoutMs);
+  });
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function ensureForegroundHandler(messaging: any) {
   if (_foregroundHandlerBound) return;
@@ -211,11 +266,41 @@ async function ensureForegroundHandler(messaging: any) {
         ...(data.click_action ? { actions: [{ action: "play", title: "▶ Play" }] } : {}),
       };
       await sw.showNotification(title, options);
+      confirmNotificationDisplay(data.probeId, true);
     } catch {
-      if (Notification.permission === "granted")
-        new Notification(title, { body, icon: "/icon-192.png" });
+      try {
+        if (Notification.permission === "granted") {
+          new Notification(title, { body, icon: "/icon-192.png" });
+          confirmNotificationDisplay(data.probeId, true);
+        } else {
+          confirmNotificationDisplay(data.probeId, false);
+        }
+      } catch {
+        confirmNotificationDisplay(data.probeId, false);
+      }
     }
   });
+}
+
+/**
+ * Registers (or re-activates) the push service worker on this origin and
+ * returns the live, controlling registration. Every OS-delivery probe
+ * depends on navigator.serviceWorker.ready resolving — which it never does
+ * without a registration existing on the current origin — so any caller
+ * that's about to probe must go through this first.
+ */
+async function ensureWebPushServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+  if (!webPushSupported()) return null;
+  try {
+    let swReg = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+    await swReg.update();
+    if (swReg.waiting) swReg.waiting.postMessage({ type: "SKIP_WAITING" });
+    swReg = await navigator.serviceWorker.ready;
+    return swReg;
+  } catch (err) {
+    console.warn("[push] service worker registration failed:", err);
+    return null;
+  }
 }
 
 async function enableWebPush(): Promise<boolean> {
@@ -236,11 +321,8 @@ async function enableWebPush(): Promise<boolean> {
   }
 
   // ── 2. Register & update the service worker ────────────────────────────────
-  // Force-activate the latest SW version immediately.
-  let swReg = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
-  await swReg.update();
-  if (swReg.waiting) swReg.waiting.postMessage({ type: "SKIP_WAITING" });
-  swReg = await navigator.serviceWorker.ready;
+  const swReg = await ensureWebPushServiceWorker();
+  if (!swReg) return false;
 
   // ── 3. Get FCM token tied to this SW registration ─────────────────────────
   const { getToken } = await import("firebase/messaging");
@@ -420,6 +502,10 @@ export interface NotificationToggleState {
   toggle: () => Promise<void>;
   /** Re-check if OS blocking was resolved (call after user returns from OS settings) */
   recheckOs: () => Promise<void>;
+  /** True while a recheckOs() call is in flight */
+  checkingOs: boolean;
+  /** Set osBlocked from the real outcome of an actual test notification send */
+  reportTestResult: (displayed: boolean) => void;
 }
 
 export function useNotificationToggle(): NotificationToggleState {
@@ -434,6 +520,7 @@ export function useNotificationToggle(): NotificationToggleState {
   const [error, setError] = useState<string | null>(null);
   const [osBlocked, setOsBlocked] = useState(false);
   const [osSettingsOpened, setOsSettingsOpened] = useState(false);
+  const [checkingOs, setCheckingOs] = useState(false);
 
   useEffect(() => {
     if (!supported) {
@@ -451,22 +538,36 @@ export function useNotificationToggle(): NotificationToggleState {
         setPermission(perm);
         setEnabled(Boolean(status?.enabled));
 
-        // If browser permission is already granted, probe OS delivery silently.
-        if (perm === "granted" && !isNativeApp()) {
-          const ok = await probeNotificationDelivery(2500);
-          setOsBlocked(!ok);
-        }
+        // Deliberately no OS-blocked probing here. This runs on every page
+        // load, on whatever origin/session happens to be current — before
+        // this specific origin has necessarily ever registered a service
+        // worker (registration only happens as a side effect of toggling
+        // notifications on or sending a test). Without a controlling SW,
+        // navigator.serviceWorker.ready never resolves, so a probe here
+        // reliably times out to "blocked" even when nothing is wrong. The
+        // "blocked" banner is only ever set from a real, explicit test
+        // outcome via reportTestResult() — never a background guess.
       } finally {
         setLoading(false);
       }
     })();
   }, [platform, supported]);
 
+  const reportTestResult = useCallback((displayed: boolean) => {
+    setOsBlocked(!displayed);
+    if (displayed) setOsSettingsOpened(false);
+  }, []);
+
   const recheckOs = useCallback(async () => {
     if (!supported || isNativeApp()) return;
-    const ok = await probeNotificationDelivery(2500);
-    setOsBlocked(!ok);
-    if (ok) setOsSettingsOpened(false);
+    setCheckingOs(true);
+    try {
+      const ok = await probeNotificationDelivery();
+      setOsBlocked(!ok);
+      if (ok) setOsSettingsOpened(false);
+    } finally {
+      setCheckingOs(false);
+    }
   }, [supported]);
 
   const toggle = useCallback(async () => {
@@ -491,8 +592,13 @@ export function useNotificationToggle(): NotificationToggleState {
           setError("Couldn't turn on notifications — try again.");
           return;
         }
+        // Ensure a service worker is actually registered on this origin
+        // before probing — without one, navigator.serviceWorker.ready never
+        // resolves and the probe times out to a false "blocked" even when
+        // nothing is wrong (e.g. a fresh origin that's never registered it).
+        await ensureWebPushServiceWorker();
         // Even though token exists, re-probe to catch OS-level blocking.
-        const ok = await probeNotificationDelivery(2500);
+        const ok = await probeNotificationDelivery();
         if (!ok) {
           const opened = await openOsNotificationSettings();
           setOsBlocked(true);
@@ -545,5 +651,7 @@ export function useNotificationToggle(): NotificationToggleState {
     os,
     toggle,
     recheckOs,
+    checkingOs,
+    reportTestResult,
   };
 }

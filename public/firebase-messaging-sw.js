@@ -55,6 +55,16 @@ self.addEventListener("message", (event) => {
 });
 
 
+// Broadcasts whether a specific test push (identified by data.probeId) was
+// actually handed to the OS for display. Lets the page confirm delivery
+// against the real notification it just sent, instead of a separate probe.
+function reportTestDisplay(probeId, displayed) {
+  if (!probeId) return;
+  self.clients.matchAll({ type: "window" }).then((clients) => {
+    clients.forEach((c) => c.postMessage({ type: "TEST_NOTIFICATION_DISPLAYED", probeId, displayed }));
+  });
+}
+
 messaging.onBackgroundMessage((payload) => {
   const title = payload.notification?.title ?? "Leora";
   const body  = payload.notification?.body  ?? "New briefing ready.";
@@ -65,7 +75,9 @@ messaging.onBackgroundMessage((payload) => {
     badge: "/icon-192.png",
     data,
     ...(data.click_action ? { actions: [{ action: "play", title: "▶ Play" }] } : {}),
-  });
+  })
+    .then(() => reportTestDisplay(data.probeId, true))
+    .catch(() => reportTestDisplay(data.probeId, false));
 });
 
 self.addEventListener("notificationclick", (event) => {

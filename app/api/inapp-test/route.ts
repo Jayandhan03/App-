@@ -72,6 +72,13 @@ export async function POST(req: NextRequest) {
         : "/dashboard";
     const hasVoice = clickUrl.includes("/test-briefing");
 
+    // Optional client-generated id — echoed back in `data` so the page can
+    // correlate this specific push with its own display confirmation (see
+    // waitForNotificationDisplay in lib/push.ts) instead of relying on a
+    // separate, unrelated synthetic probe.
+    const probeId: string | undefined =
+      typeof body.probeId === "string" && body.probeId ? body.probeId : undefined;
+
     const messaging = await getAdminMessaging();
 
     const notification = {
@@ -83,6 +90,7 @@ export async function POST(req: NextRequest) {
     const data = {
       click_action: clickUrl,
       type: "test",
+      ...(probeId ? { probeId } : {}),
       // Absolute URL so the native player (which has no browser base URL to
       // resolve a relative path against) can play it directly.
       ...(hasVoice ? { audio_url: `${req.nextUrl.origin}/audio/test-briefing.mp3` } : {}),
